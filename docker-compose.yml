@@ -3,12 +3,12 @@ version: '3.9'
 services:
   postgres:
     image: postgres:15
-    container_name: nextjs_postgres
+    container_name: mis
     restart: unless-stopped
     environment:
-      POSTGRES_USER: education
+      POSTGRES_USER: mislms
       POSTGRES_PASSWORD: Number123
-      POSTGRES_DB: nextjsdb
+      POSTGRES_DB: misdb
     ports:
       - '5432:5432'
     volumes:

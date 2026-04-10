@@ -1,0 +1,369 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// schema.prisma - Fix the relations
+
+model User {
+  id              Int        @id @default(autoincrement())
+  email           String     @unique
+  name            String?
+  password        String
+  phone           String?
+  address         String?
+  profilePicture  String?
+  status          Status     @default(active)
+  roleId          Int
+  role            Role       @relation(fields: [roleId], references: [id])
+
+  departmentId    Int?
+  department      Department?      @relation("DepartmentUsers", fields: [departmentId], references: [id])
+  headedDepartments Department[]    @relation("HeadOfDepartment")
+
+  students        Student[]
+  faculty          Faculty[]
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  @@index([roleId])
+  @@index([email])
+}
+
+model Role {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  description String?
+  
+  users       User[]
+  permissions RolePermission[]
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Permission {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  description String?
+  resource    String
+  action      String
+  category    String?
+  roles       RolePermission[]
+  
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  @@unique([resource, action])
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@id([roleId, permissionId])
+}
+
+enum Status {
+  active
+  inactive
+}
+
+model Department {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  code            String           @unique
+  description     String?
+  status          DepartmentStatus @default(active)
+  headOfDepartmentId Int?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  users           User[]           @relation("DepartmentUsers")
+  headOfDepartment User?           @relation("HeadOfDepartment", fields: [headOfDepartmentId], references: [id])
+  batches         Batch[]
+  courses         Course[]
+  classrooms      Classroom[]
+
+}
+
+enum DepartmentStatus {
+  active
+  inactive
+  archived
+}
+
+model Batch {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  description     String?
+  academicYear    String?
+  startDate       DateTime?
+  endDate         DateTime?
+  status          BatchStatus      @default(active)
+  departmentId    Int?
+  
+  department      Department?      @relation(fields: [departmentId], references: [id])
+  
+  students        Student[]
+  classrooms      Classroom[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+enum BatchStatus {
+  active
+  inactive
+  completed
+  archived
+}
+
+// Add this to your schema.prisma file
+
+model Student {
+  id              Int        @id @default(autoincrement())
+  name            String
+  email           String?    @unique
+  phone           String?
+  address         String?
+  enrollmentNo    String?    @unique
+  rollNo          String?
+  dateOfBirth     DateTime?
+  gender          String?
+  profilePicture  String?
+  status          Status     @default(active)
+  examRollNumber String?    @unique
+   enrollmentDate DateTime?  @default(now())
+
+   // Add these fields if you want them in database
+  bloodGroup      String?
+  guardianName    String?
+  guardianContact String?
+  guardianEmail   String?
+  emergencyContact String?
+  
+  userId          Int?       @unique
+  user            User?      @relation(fields: [userId], references: [id])
+
+  batchId         Int?
+  batch           Batch?     @relation(fields: [batchId], references: [id])
+  attendances     Attendance[]
+  attendanceSummary AttendanceSummary[]
+  classroomEnrollments ClassroomEnrollment[]
+  
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  
+  @@index([batchId])
+  @@index([enrollmentNo])
+}
+
+model Course {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  code            String           @unique
+  credits         Int?
+  description     String?
+  lecture         Int?
+  tutorial        Int?
+  practical       Int?
+  noncredit       Boolean          @default(false)
+  courseType      CourseType       @default(core)
+  semester        Semester         @default(semester1)
+  syllabus        String?
+  departmentId    Int?
+  
+  department      Department?      @relation(fields: [departmentId], references: [id])
+  classrooms      Classroom[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+enum CourseType {
+  core
+  elective
+}
+
+enum Semester {
+  semester1
+  semester2
+  semester3
+  semester4
+  semester5
+  semester6
+  semester7
+  semester8
+}
+
+
+model Faculty {
+  id              Int              @id @default(autoincrement())
+  name            String
+  phone           String?          @unique
+  email           String?          @unique
+  address         String?
+  joinedDate      DateTime         @default(now())
+  cv              String?
+  designation     String?
+  qualification   String?
+  specialization  String?
+  status          FacultyStatus    @default(active)
+  
+  userId          Int?             @unique
+  user            User?            @relation(fields: [userId], references: [id])
+  classrooms      Classroom[]
+  sessions        ClassSession[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+enum FacultyStatus {
+  active
+  inactive
+  on_leave
+  retired
+}
+model Classroom {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique
+  startDate       DateTime?
+  endDate         DateTime?
+  capacity        Int?
+  courseId        Int?
+  facultyId       Int?
+  batchId         Int?
+  departmentId    Int?
+  
+  course          Course?          @relation(fields: [courseId], references: [id])
+  faculty         Faculty?         @relation(fields: [facultyId], references: [id])
+  batch           Batch?           @relation(fields: [batchId], references: [id])
+  department      Department?      @relation(fields: [departmentId], references: [id])
+  enrollments     ClassroomEnrollment[]
+  sessions        ClassSession[]
+  attendanceSummary AttendanceSummary[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model ClassroomEnrollment {
+  id              Int              @id @default(autoincrement())
+  studentId       Int
+  classroomId     Int
+  enrolledAt      DateTime         @default(now())
+  status          EnrollmentStatus @default(active)
+  
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classroom       Classroom        @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  
+  @@unique([studentId, classroomId])
+  @@index([classroomId])
+  @@index([studentId])
+}
+
+enum EnrollmentStatus {
+  active
+  dropped
+  completed
+}
+
+// ============================================
+// ATTENDANCE TRACKING
+// ============================================
+
+model ClassSession {
+  id              Int              @id @default(autoincrement())
+  title           String
+  date            DateTime         @default(now())
+  startTime       DateTime?
+  endTime         DateTime?
+  syllabusCovered String?
+  notes           String?
+  materialUrl     String?
+  sessionType     SessionType      @default(regular)
+  
+  classroomId     Int
+  classroom       Classroom        @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  facultyId       Int?
+  faculty         Faculty?         @relation(fields: [facultyId], references: [id])
+  attendances     Attendance[]
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@unique([classroomId, date, startTime])
+  @@index([date])
+  @@index([classroomId, date])
+  @@index([facultyId])
+}
+
+enum SessionType {
+  regular
+  makeup
+  special
+  exam
+  holiday
+}
+
+model Attendance {
+  id              Int              @id @default(autoincrement())
+  status          AttendanceStatus @default(present)
+  checkInTime     DateTime?
+  checkOutTime    DateTime?
+  remarks         String?
+  markedBy        Int?
+  markedAt        DateTime         @default(now())
+  
+  studentId       Int
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classSessionId  Int
+  classSession    ClassSession     @relation(fields: [classSessionId], references: [id], onDelete: Cascade)
+  
+  @@unique([studentId, classSessionId])
+  @@index([studentId])
+  @@index([classSessionId])
+  @@index([status])
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  late
+  excused
+  holiday
+}
+
+// ============================================
+// ATTENDANCE ANALYTICS
+// ============================================
+
+model AttendanceSummary {
+  id              Int              @id @default(autoincrement())
+  studentId       Int
+  classroomId     Int
+  totalSessions   Int              @default(0)
+  presentCount    Int              @default(0)
+  absentCount     Int              @default(0)
+  lateCount       Int              @default(0)
+  excusedCount    Int              @default(0)
+  percentage      Float            @default(0)
+  lastUpdated     DateTime         @default(now())
+  
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  classroom       Classroom        @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  
+  @@unique([studentId, classroomId])
+  @@index([studentId])
+  @@index([classroomId])
+  @@index([percentage])
+}
+

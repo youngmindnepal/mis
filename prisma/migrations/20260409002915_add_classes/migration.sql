@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Student" ADD COLUMN     "enrollmentDate" TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP;
