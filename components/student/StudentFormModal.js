@@ -1,4 +1,3 @@
-// components/student/StudentFormModal.jsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -17,8 +16,8 @@ export default function StudentFormModal({
     email: '',
     phone: '',
     address: '',
-    rollNo: '', // Changed from rollNumber to rollNo to match schema
-    enrollmentNo: '', // Changed from registrationNumber to enrollmentNo
+    rollNo: '',
+    enrollmentNo: '',
     examRollNumber: '',
     enrollmentDate: new Date().toISOString().split('T')[0],
     dateOfBirth: '',
@@ -29,6 +28,7 @@ export default function StudentFormModal({
     emergencyContact: '',
     batchId: '',
     status: 'active',
+    inactiveDate: '',
     photo: null,
     photoPreview: null,
   });
@@ -50,7 +50,7 @@ export default function StudentFormModal({
   const fetchBatches = async () => {
     try {
       setLoadingBatches(true);
-      const response = await fetch('/api/batches?limit=1000');
+      const response = await fetch('/api/batches?limit=1000&status=active');
       if (!response.ok) {
         throw new Error('Failed to fetch batches');
       }
@@ -67,11 +67,11 @@ export default function StudentFormModal({
   useEffect(() => {
     if (initialData) {
       setFormData({
-        name: initialData.user?.name || initialData.name || '',
-        email: initialData.user?.email || initialData.email || '',
+        name: initialData.name || initialData.user?.name || '',
+        email: initialData.email || initialData.user?.email || '',
         phone: initialData.phone || '',
         address: initialData.address || '',
-        rollNo: initialData.rollNo || initialData.rollNumber || '', // Handle both field names
+        rollNo: initialData.rollNo || initialData.rollNumber || '',
         enrollmentNo:
           initialData.enrollmentNo || initialData.registrationNumber || '',
         examRollNumber: initialData.examRollNumber || '',
@@ -88,6 +88,9 @@ export default function StudentFormModal({
         emergencyContact: initialData.emergencyContact || '',
         batchId: initialData.batchId?.toString() || '',
         status: initialData.status || 'active',
+        inactiveDate: initialData.inactiveDate
+          ? new Date(initialData.inactiveDate).toISOString().split('T')[0]
+          : '',
         photo: null,
         photoPreview: initialData.profilePicture || initialData.photo || null,
       });
@@ -109,6 +112,7 @@ export default function StudentFormModal({
         emergencyContact: '',
         batchId: '',
         status: 'active',
+        inactiveDate: '',
         photo: null,
         photoPreview: null,
       });
@@ -142,6 +146,21 @@ export default function StudentFormModal({
       const age = today.getFullYear() - dob.getFullYear();
       if (age < 5 || age > 100) {
         newErrors.dateOfBirth = 'Age must be between 5 and 100 years';
+      }
+    }
+
+    // Validate inactive date if status is inactive
+    if (formData.status === 'inactive' && !formData.inactiveDate) {
+      newErrors.inactiveDate =
+        'Inactive date is required when status is inactive';
+    }
+
+    // Validate inactive date is not in the future
+    if (formData.inactiveDate) {
+      const inactiveDate = new Date(formData.inactiveDate);
+      const today = new Date();
+      if (inactiveDate > today) {
+        newErrors.inactiveDate = 'Inactive date cannot be in the future';
       }
     }
 
@@ -184,17 +203,14 @@ export default function StudentFormModal({
     try {
       const submitData = new FormData();
 
-      // Student fields (using correct schema field names)
+      // Student fields
       submitData.append('name', formData.name.trim());
       submitData.append('email', formData.email.trim());
       submitData.append('phone', formData.phone.trim());
       submitData.append('address', formData.address || '');
-
-      // IMPORTANT: Use 'rollNo' not 'rollNumber' to match schema
       submitData.append('rollNo', formData.rollNo || '');
       submitData.append('enrollmentNo', formData.enrollmentNo || '');
       submitData.append('examRollNumber', formData.examRollNumber || '');
-
       submitData.append('enrollmentDate', formData.enrollmentDate);
       submitData.append('dateOfBirth', formData.dateOfBirth || '');
       submitData.append('bloodGroup', formData.bloodGroup || '');
@@ -204,6 +220,11 @@ export default function StudentFormModal({
       submitData.append('emergencyContact', formData.emergencyContact || '');
       submitData.append('batchId', formData.batchId || '');
       submitData.append('status', formData.status);
+      submitData.append('inactiveDate', formData.inactiveDate || '');
+
+      if (initialData?.id) {
+        submitData.append('id', initialData.id.toString());
+      }
 
       if (formData.photo && formData.photo instanceof File) {
         submitData.append('profilePicture', formData.photo);
@@ -633,6 +654,52 @@ export default function StudentFormModal({
                       </div>
                     )}
                   </div>
+
+                  {/* Status and Inactive Date - Both always visible */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Status
+                      </label>
+                      <select
+                        value={formData.status}
+                        onChange={(e) => handleChange('status', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        disabled={submitting}
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="graduated">Graduated</option>
+                        <option value="transferred">Transferred</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Inactive Date {formData.status === 'inactive' && '*'}
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.inactiveDate}
+                        onChange={(e) =>
+                          handleChange('inactiveDate', e.target.value)
+                        }
+                        className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                          errors.inactiveDate
+                            ? 'border-red-500'
+                            : 'border-gray-300'
+                        }`}
+                        disabled={submitting}
+                        max={new Date().toISOString().split('T')[0]}
+                      />
+                      {errors.inactiveDate && (
+                        <p className="mt-1 text-sm text-red-600">
+                          {errors.inactiveDate}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Guardian Information */}
@@ -723,27 +790,6 @@ export default function StudentFormModal({
                       placeholder="Student's residential address"
                       disabled={submitting}
                     />
-                  </div>
-                </div>
-
-                {/* Status */}
-                <div className="space-y-4 md:col-span-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Status
-                    </label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => handleChange('status', e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      disabled={submitting}
-                    >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                      <option value="graduated">Graduated</option>
-                      <option value="transferred">Transferred</option>
-                      <option value="suspended">Suspended</option>
-                    </select>
                   </div>
                 </div>
               </div>

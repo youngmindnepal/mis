@@ -7,6 +7,7 @@ import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
 import CourseFormModal from '@/components/course/CourseFormModal';
+import CourseAssignmentManager from '@/components/course/CourseAssignmentManager';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   exportCoursesToExcel,
@@ -41,6 +42,9 @@ export default function CoursesPage() {
   const [formLoading, setFormLoading] = useState(false);
   const [departments, setDepartments] = useState([]);
 
+  // Course Assignment Modal state
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false);
+
   // Import/Export states
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
@@ -67,6 +71,7 @@ export default function CoursesPage() {
   const hasDeletePermission = can('courses', 'delete');
   const hasExportPermission = can('courses', 'export') || hasReadPermission;
   const hasImportPermission = can('courses', 'import') || hasCreatePermission;
+  const hasAssignPermission = can('courses', 'update') || hasCreatePermission; // Permission for assigning courses
 
   // Auto-dismiss success message
   useEffect(() => {
@@ -915,6 +920,14 @@ export default function CoursesPage() {
             />
             Refresh
           </button>
+          {hasAssignPermission && (
+            <button
+              onClick={() => setShowAssignmentModal(true)}
+              className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 transition-colors flex items-center gap-2"
+            >
+              <Icons.Link size={18} /> Assign to Batch
+            </button>
+          )}
           {hasImportPermission && (
             <>
               <button
@@ -1233,18 +1246,38 @@ export default function CoursesPage() {
         </div>
       </div>
 
-      {/* Import Modal */}
+      {/* Course Assignment Modal */}
       <AnimatePresence>
-        {showImportModal && hasImportPermission && (
-          // ... existing import modal code ...
+        {showAssignmentModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-            onClick={() => setShowImportModal(false)}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto"
+            onClick={() => setShowAssignmentModal(false)}
           >
-            {/* Keep your existing import modal content */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl max-w-7xl w-full max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+                <h2 className="text-xl font-bold text-gray-800">
+                  Assign Courses to Batch
+                </h2>
+                <button
+                  onClick={() => setShowAssignmentModal(false)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <Icons.X size={20} />
+                </button>
+              </div>
+              <div className="p-1">
+                <CourseAssignmentManager />
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1264,7 +1297,6 @@ export default function CoursesPage() {
       {/* Delete Confirmation Modal */}
       <AnimatePresence>
         {showDeleteConfirm && courseToDelete && (
-          // ... existing delete confirmation modal ...
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1272,7 +1304,51 @@ export default function CoursesPage() {
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
             onClick={() => setShowDeleteConfirm(false)}
           >
-            {/* Keep your existing delete confirmation content */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Icons.AlertTriangle size={32} className="text-red-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">
+                  Delete Course
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to delete "{courseToDelete.name}"? This
+                  action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => handleDeleteCourse(courseToDelete.id)}
+                    disabled={deleting}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {deleting ? (
+                      <>
+                        <Icons.Loader2 size={16} className="animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Icons.Trash2 size={16} />
+                        Delete
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -1280,7 +1356,6 @@ export default function CoursesPage() {
       {/* Bulk Delete Confirmation Modal */}
       <AnimatePresence>
         {showBulkDeleteConfirm && (
-          // ... existing bulk delete modal ...
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1288,7 +1363,51 @@ export default function CoursesPage() {
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
             onClick={() => setShowBulkDeleteConfirm(false)}
           >
-            {/* Keep your existing bulk delete confirmation content */}
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-2xl max-w-md w-full p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Icons.AlertTriangle size={32} className="text-red-600" />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800 mb-2">
+                  Delete Selected Courses
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to delete {selectedCourseIds.length}{' '}
+                  selected course(s)? This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowBulkDeleteConfirm(false)}
+                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={deleting}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {deleting ? (
+                      <>
+                        <Icons.Loader2 size={16} className="animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      <>
+                        <Icons.Trash2 size={16} />
+                        Delete All
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

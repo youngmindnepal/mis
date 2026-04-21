@@ -121,7 +121,7 @@ export const menuConfig = [
     children: [
       {
         id: 51,
-        name: 'All Exams',
+        name: 'Internal Exams',
         path: '/dashboard/exams',
         icon: 'FileSpreadsheet',
         description: 'View all exams',
@@ -129,11 +129,11 @@ export const menuConfig = [
       },
       {
         id: 52,
-        name: 'Create Exam',
-        path: '/dashboard/exams/create',
+        name: 'TU Exams',
+        path: '/dashboard/exams/tu',
         icon: 'PlusCircle',
         description: 'Create new exam',
-        permission: { resource: 'exam', action: 'create' },
+        permission: { resource: 'tu', action: 'read' },
       },
       {
         id: 53,

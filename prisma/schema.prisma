@@ -26,6 +26,10 @@ model User {
 
   students        Student[]
   faculty          Faculty[]
+
+  enteredResults     Result[]        @relation("EnteredResults")  // Changed from "EnteredByUser"
+  verifiedResults    Result[]        @relation("VerifiedResults")  // Changed from "VerifiedByUser"
+    
   
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -91,6 +95,8 @@ model Department {
   batches         Batch[]
   courses         Course[]
   classrooms      Classroom[]
+  exams           Exam[]
+  courseLists      CourseList[]
 
 }
 
@@ -114,6 +120,9 @@ model Batch {
   
   students        Student[]
   classrooms      Classroom[]
+  exams           Exam[]
+  courseLists      CourseList[]
+  examConfigs      ExamConfig[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -139,6 +148,7 @@ model Student {
   gender          String?
   profilePicture  String?
   status          Status     @default(active)
+  inactiveDate     DateTime? 
   examRollNumber String?    @unique
    enrollmentDate DateTime?  @default(now())
 
@@ -157,6 +167,8 @@ model Student {
   attendances     Attendance[]
   attendanceSummary AttendanceSummary[]
   classroomEnrollments ClassroomEnrollment[]
+
+  results         Result[]
   
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -182,7 +194,8 @@ model Course {
   
   department      Department?      @relation(fields: [departmentId], references: [id])
   classrooms      Classroom[]
-  
+  courseLists      CourseList[]
+  results         Result[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -250,6 +263,8 @@ model Classroom {
   enrollments     ClassroomEnrollment[]
   sessions        ClassSession[]
   attendanceSummary AttendanceSummary[]
+  exams           Exam[]
+  results         Result[]
   
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -367,3 +382,185 @@ model AttendanceSummary {
   @@index([percentage])
 }
 
+model ExamType{
+  id Int @id @default(autoincrement())
+  name String @unique
+  code String @unique
+  description String?
+  status ExamTypeStatus @default(active)
+  weightage Float?
+  isGraded Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exams Exam[]
+  results Result[]
+
+
+}
+
+enum ExamTypeStatus {
+  active
+  inactive
+  archived
+}
+
+model Exam{
+  id Int @id @default(autoincrement())
+  name String
+  
+  examTypeId      Int
+  examType        ExamType         @relation(fields: [examTypeId], references: [id])
+
+  academicYear String?
+  semester Semester?
+  date DateTime?
+  startTime DateTime?
+  endTime DateTime?
+
+  status ExamStatus @default(scheduled)
+
+  departmentId Int?
+  department Department? @relation(fields: [departmentId], references: [id])
+
+  batchId Int?
+  batch Batch? @relation(fields: [batchId], references: [id])
+
+  classroomId Int?
+  classroom Classroom? @relation(fields: [classroomId], references: [id])
+
+  results Result[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ExamStatus {
+  scheduled
+  ongoing
+  completed
+  cancelled
+  result_published
+}
+
+model Result {
+  id              Int              @id @default(autoincrement())
+  
+  studentId       Int
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  
+  classroomId     Int?
+  classroom       Classroom?       @relation(fields: [classroomId], references: [id])
+
+  examId          Int?
+  exam            Exam?             @relation(fields: [examId], references: [id], onDelete: Cascade)
+
+  examTypeId      Int?
+  examType        ExamType?        @relation(fields: [examTypeId], references: [id])
+
+  courseId        Int?
+  course          Course?          @relation(fields: [courseId], references: [id])
+
+ examCategory    ExamCategory     @default(regular)
+  attempt         Int?             // For supplementary exams (1, 2, 3, etc.)
+  semester        Semester?        // The semester this result belongs to
+  // Marks
+  theoryMarks     Float?
+  practicalMarks  Float?
+  totalMarks      Float?
+  maxMarks        Float?           @default(100)
+  passMarks       Float?           @default(40)
+
+  // Grade
+  grade           String?
+  gradePoint      Float? 
+  resultStatus    ResultStatus     @default(pending)
+
+  // Additional Info
+  remarks         String?
+  isAbsent        Boolean          @default(false)
+  isPassed        Boolean?
+  examRollNumber  String?
+  resultDate DateTime?
+  // Audit
+  enteredBy       Int?
+  enteredByUser   User?            @relation("EnteredResults", fields: [enteredBy], references: [id])  // Matches User model
+
+  verifiedBy      Int?
+  verifiedByUser  User?            @relation("VerifiedResults", fields: [verifiedBy], references: [id])  // Matches User model
+  verifiedAt      DateTime?
+  
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@unique([studentId, courseId, examCategory, attempt], name: "unique_result_per_attempt")
+ 
+  @@index([studentId])
+  @@index([examId])
+  @@index([classroomId])
+  @@index([resultStatus])
+  @@index([examCategory])
+  @@index([semester])
+  @@index([attempt])
+}
+
+enum ResultStatus {
+  pending
+  draft
+  verified
+  published
+  re_evaluation
+  final
+}
+
+enum ExamCategory {
+  regular
+  supplementary
+}
+
+model CourseList {
+  id              Int              @id @default(autoincrement())
+
+  departmentId    Int
+  department      Department       @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  batchId         Int
+  courseId        Int
+  semester        Semester         @default(semester1)
+  isActive        Boolean          @default(true)
+ 
+  
+  
+  batch           Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  course          Course           @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  
+  
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  
+  @@unique([batchId, courseId, semester])
+  @@index([batchId])
+  @@index([courseId])
+  @@index([semester])
+}
+
+// Add this to your schema.prisma file
+
+model ExamConfig {
+  id            Int      @id @default(autoincrement())
+  batchId       Int
+  semester      Semester
+  examCategory  ExamCategory
+  resultDate    DateTime
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  batch         Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, semester, examCategory])
+  @@index([batchId])
+  @@index([semester])
+  @@index([examCategory])
+}

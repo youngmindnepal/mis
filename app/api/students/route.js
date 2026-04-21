@@ -1,128 +1,34 @@
-// app/api/students/route.js
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import bcrypt from 'bcryptjs';
 import { writeFile, mkdir } from 'fs/promises';
 import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import { existsSync } from 'fs';
 
-// Permission checking function
-async function hasPermission(userId, resource, action) {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        role: {
-          include: {
-            permissions: {
-              include: {
-                permission: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!user) return false;
-
-    if (user.role?.name === 'SYSTEM_ADMIN') {
-      return true;
-    }
-
-    const hasRequiredPermission = user.role?.permissions?.some(
-      (rp) =>
-        rp.permission.resource === resource && rp.permission.action === action
-    );
-
-    return hasRequiredPermission || false;
-  } catch (error) {
-    console.error('Error checking permission:', error);
-    return false;
-  }
-}
-
-// Helper function to format student response
-function formatStudentResponse(student) {
-  return {
-    id: student.id,
-    name: student.name,
-    email: student.email,
-    phone: student.phone,
-    address: student.address,
-    rollNo: student.rollNo,
-    rollNumber: student.rollNo, // For frontend compatibility
-    enrollmentNo: student.enrollmentNo,
-    registrationNumber: student.enrollmentNo, // For frontend compatibility
-    examRollNumber: student.examRollNumber,
-    dateOfBirth: student.dateOfBirth,
-    gender: student.gender,
-    profilePicture: student.profilePicture,
-    status: student.status,
-    batchId: student.batchId,
-    createdAt: student.createdAt,
-    updatedAt: student.updatedAt,
-    batch: student.batch
-      ? {
-          id: student.batch.id,
-          name: student.batch.name,
-          academicYear: student.batch.academicYear,
-          department: student.batch.department
-            ? {
-                id: student.batch.department.id,
-                name: student.batch.department.name,
-                code: student.batch.department.code,
-              }
-            : null,
-        }
-      : null,
-    user: {
-      name: student.name,
-      email: student.email,
-    },
-  };
-}
-
+// GET - Fetch all students with pagination and filters
 export async function GET(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const canReadStudents = await hasPermission(
-      session.user.id,
-      'students',
-      'read'
-    );
-    if (!canReadStudents) {
-      return NextResponse.json(
-        { error: 'Forbidden: You do not have permission to view students' },
-        { status: 403 }
-      );
-    }
-
     const { searchParams } = new URL(request.url);
-    const page = parseInt(searchParams.get('page') || '1');
-    const limit = parseInt(searchParams.get('limit') || '100');
+    const page = parseInt(searchParams.get('page')) || 1;
+    const limit = parseInt(searchParams.get('limit')) || 10;
     const search = searchParams.get('search') || '';
-    const status = searchParams.get('status');
-    const batchId = searchParams.get('batchId');
-    const sortBy = searchParams.get('sortBy') || 'name';
-    const sortOrder = searchParams.get('sortOrder') || 'asc';
+    const status = searchParams.get('status') || '';
+    const batchId = searchParams.get('batchId') || '';
+    const sortBy = searchParams.get('sortBy') || 'createdAt';
+    const sortOrder = searchParams.get('sortOrder') || 'desc';
 
     const skip = (page - 1) * limit;
 
+    // Build where clause
     const where = {};
 
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
         { email: { contains: search, mode: 'insensitive' } },
-        { phone: { contains: search, mode: 'insensitive' } },
-        { enrollmentNo: { contains: search, mode: 'insensitive' } },
         { rollNo: { contains: search, mode: 'insensitive' } },
+        { enrollmentNo: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search, mode: 'insensitive' } },
       ];
     }
 
@@ -134,26 +40,14 @@ export async function GET(request) {
       where.batchId = parseInt(batchId);
     }
 
-    let orderBy = {};
-    if (sortBy === 'name') {
-      orderBy = { name: sortOrder };
-    } else if (sortBy === 'rollNumber') {
-      orderBy = { rollNo: sortOrder };
-    } else if (sortBy === 'status') {
-      orderBy = { status: sortOrder };
-    } else if (sortBy === 'createdAt') {
-      orderBy = { createdAt: sortOrder };
-    } else {
-      orderBy = { name: 'asc' };
-    }
-
-    const total = await prisma.student.count({ where });
-
+    // Fetch students
     const students = await prisma.student.findMany({
       where,
       skip,
       take: limit,
-      orderBy,
+      orderBy: {
+        [sortBy]: sortOrder,
+      },
       include: {
         batch: {
           include: {
@@ -163,70 +57,84 @@ export async function GET(request) {
       },
     });
 
-    const formattedStudents = students.map(formatStudentResponse);
+    // Get total count for pagination
+    const total = await prisma.student.count({ where });
+
+    // Transform students for frontend compatibility
+    const transformedStudents = students.map((student) => ({
+      ...student,
+      user: {
+        name: student.name,
+        email: student.email,
+      },
+      rollNumber: student.rollNo,
+      registrationNumber: student.enrollmentNo,
+      photo: student.profilePicture,
+    }));
 
     return NextResponse.json({
-      students: formattedStudents,
+      students: transformedStudents,
       pagination: {
-        currentPage: page,
+        page,
+        limit,
+        total,
         totalPages: Math.ceil(total / limit),
-        totalItems: total,
-        itemsPerPage: limit,
       },
     });
   } catch (error) {
     console.error('Error fetching students:', error);
     return NextResponse.json(
-      { error: 'Internal server error: ' + error.message },
+      { error: 'Failed to fetch students', details: error.message },
       { status: 500 }
     );
   }
 }
 
+// POST - Create a new student
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const canCreateStudents = await hasPermission(
-      session.user.id,
-      'students',
-      'create'
-    );
-    if (!canCreateStudents) {
-      return NextResponse.json(
-        { error: 'Forbidden: You do not have permission to create students' },
-        { status: 403 }
-      );
-    }
-
     const formData = await request.formData();
 
-    const name = formData.get('name');
-    const email = formData.get('email');
-    const phone = formData.get('phone');
-    const address = formData.get('address');
-    // IMPORTANT: Get 'rollNo' from formData (not 'rollNumber')
-    const rollNo = formData.get('rollNo') || formData.get('rollNumber');
+    // Extract form data with proper null handling
+    const name = formData.get('name')?.toString().trim();
+    const email = formData.get('email')?.toString().trim().toLowerCase();
+    const phone = formData.get('phone')?.toString().trim();
+    const address = formData.get('address')?.toString().trim() || null;
+    const rollNo =
+      formData.get('rollNo')?.toString().trim() ||
+      formData.get('rollNumber')?.toString().trim() ||
+      null;
     const enrollmentNo =
-      formData.get('enrollmentNo') || formData.get('enrollmentNumber');
-    const examRollNumber = formData.get('examRollNumber');
-    const enrollmentDate = formData.get('enrollmentDate');
-    const dateOfBirth = formData.get('dateOfBirth');
-    const bloodGroup = formData.get('bloodGroup');
-    const guardianName = formData.get('guardianName');
-    const guardianContact = formData.get('guardianContact');
-    const guardianEmail = formData.get('guardianEmail');
-    const emergencyContact = formData.get('emergencyContact');
-    const batchId = formData.get('batchId');
-    const status = formData.get('status');
-    const profilePicture = formData.get('profilePicture');
+      formData.get('enrollmentNo')?.toString().trim() ||
+      formData.get('registrationNumber')?.toString().trim() ||
+      null;
+    const examRollNumber =
+      formData.get('examRollNumber')?.toString().trim() || null;
+    const enrollmentDate = formData.get('enrollmentDate')?.toString();
+    const dateOfBirth = formData.get('dateOfBirth')?.toString() || null;
+    const bloodGroup = formData.get('bloodGroup')?.toString() || null;
+    const guardianName =
+      formData.get('guardianName')?.toString().trim() || null;
+    const guardianContact =
+      formData.get('guardianContact')?.toString().trim() || null;
+    const guardianEmail =
+      formData.get('guardianEmail')?.toString().trim() || null;
+    const emergencyContact =
+      formData.get('emergencyContact')?.toString().trim() || null;
+    const batchIdRaw = formData.get('batchId')?.toString();
+    const batchId =
+      batchIdRaw && batchIdRaw !== '' ? parseInt(batchIdRaw) : null;
+    const status = formData.get('status')?.toString() || 'active';
+    const inactiveDate = formData.get('inactiveDate')?.toString() || null;
+    const profilePicture =
+      formData.get('profilePicture') || formData.get('photo');
 
     // Validate required fields
     if (!name) {
-      return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Student name is required' },
+        { status: 400 }
+      );
     }
 
     if (!email) {
@@ -234,103 +142,171 @@ export async function POST(request) {
     }
 
     if (!phone) {
-      return NextResponse.json({ error: 'Phone is required' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Phone number is required' },
+        { status: 400 }
+      );
     }
 
-    // Check for existing student with same email
-    const existingEmail = await prisma.student.findFirst({
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: 'Invalid email format' },
+        { status: 400 }
+      );
+    }
+
+    // Validate phone format (10 digits)
+    const phoneRegex = /^\d{10}$/;
+    if (!phoneRegex.test(phone.replace(/\D/g, ''))) {
+      return NextResponse.json(
+        { error: 'Phone number must be 10 digits' },
+        { status: 400 }
+      );
+    }
+
+    // Check if student with email already exists
+    const existingStudent = await prisma.student.findUnique({
       where: { email },
     });
-    if (existingEmail) {
+
+    if (existingStudent) {
       return NextResponse.json(
-        { error: 'Student with this email already exists' },
-        { status: 409 }
+        { error: 'A student with this email already exists' },
+        { status: 400 }
       );
     }
 
-    // Check for existing student with same phone
-    const existingPhone = await prisma.student.findFirst({
-      where: { phone },
-    });
-    if (existingPhone) {
-      return NextResponse.json(
-        { error: 'Student with this phone number already exists' },
-        { status: 409 }
-      );
-    }
-
-    // Check roll number uniqueness if provided
-    if (rollNo) {
-      const existingRollNo = await prisma.student.findFirst({
-        where: { rollNo: rollNo },
+    // Check if enrollment number already exists (if provided)
+    if (enrollmentNo) {
+      const existingEnrollment = await prisma.student.findUnique({
+        where: { enrollmentNo },
       });
-      if (existingRollNo) {
+
+      if (existingEnrollment) {
         return NextResponse.json(
-          { error: 'Roll number already exists' },
-          { status: 409 }
+          { error: 'A student with this enrollment number already exists' },
+          { status: 400 }
         );
       }
     }
 
-    // Handle photo upload
+    // Check if exam roll number already exists (if provided)
+    if (examRollNumber) {
+      const existingExamRoll = await prisma.student.findUnique({
+        where: { examRollNumber },
+      });
+
+      if (existingExamRoll) {
+        return NextResponse.json(
+          { error: 'A student with this exam roll number already exists' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // If batchId is provided, verify it exists
+    if (batchId) {
+      const batchExists = await prisma.batch.findUnique({
+        where: { id: batchId },
+      });
+
+      if (!batchExists) {
+        return NextResponse.json(
+          { error: 'Selected batch does not exist' },
+          { status: 400 }
+        );
+      }
+    }
+
+    // Handle profile picture upload
     let photoPath = null;
     if (
       profilePicture &&
       profilePicture instanceof File &&
       profilePicture.size > 0
     ) {
-      if (!profilePicture.type.startsWith('image/')) {
+      try {
+        // Validate file type
+        if (!profilePicture.type.startsWith('image/')) {
+          return NextResponse.json(
+            { error: 'Profile picture must be an image file' },
+            { status: 400 }
+          );
+        }
+
+        // Validate file size (max 5MB)
+        if (profilePicture.size > 5 * 1024 * 1024) {
+          return NextResponse.json(
+            { error: 'Profile picture must be less than 5MB' },
+            { status: 400 }
+          );
+        }
+
+        const bytes = await profilePicture.arrayBuffer();
+        const buffer = Buffer.from(bytes);
+
+        // Generate unique filename
+        const fileExt = profilePicture.name.split('.').pop();
+        const filename = `${uuidv4()}.${fileExt}`;
+        const uploadDir = path.join(
+          process.cwd(),
+          'public',
+          'uploads',
+          'students'
+        );
+
+        // Create directory if it doesn't exist
+        if (!existsSync(uploadDir)) {
+          await mkdir(uploadDir, { recursive: true });
+        }
+
+        const filePath = path.join(uploadDir, filename);
+        await writeFile(filePath, buffer);
+        photoPath = `/uploads/students/${filename}`;
+      } catch (uploadError) {
+        console.error('Error uploading photo:', uploadError);
         return NextResponse.json(
-          { error: 'File must be an image' },
-          { status: 400 }
+          { error: 'Failed to upload profile picture' },
+          { status: 500 }
         );
       }
-
-      if (profilePicture.size > 5 * 1024 * 1024) {
-        return NextResponse.json(
-          { error: 'File size must be less than 5MB' },
-          { status: 400 }
-        );
-      }
-
-      const bytes = await profilePicture.arrayBuffer();
-      const buffer = Buffer.from(bytes);
-
-      const timestamp = Date.now();
-      const randomString = Math.random().toString(36).substring(2, 8);
-      const sanitizedName = profilePicture.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const filename = `student-${timestamp}-${randomString}-${sanitizedName}`;
-      const uploadDir = path.join(process.cwd(), 'public/uploads/students');
-
-      await mkdir(uploadDir, { recursive: true });
-
-      const filepath = path.join(uploadDir, filename);
-      await writeFile(filepath, buffer);
-
-      photoPath = `/uploads/students/${filename}`;
     }
 
-    // Create student - using correct schema field names
+    // Prepare student data for creation
+    const studentData = {
+      name,
+      email,
+      phone,
+      address,
+      rollNo,
+      enrollmentNo,
+      examRollNumber,
+      enrollmentDate: enrollmentDate ? new Date(enrollmentDate) : new Date(),
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
+      bloodGroup,
+      guardianName,
+      guardianContact,
+      guardianEmail,
+      emergencyContact,
+      profilePicture: photoPath,
+      status,
+      inactiveDate: inactiveDate ? new Date(inactiveDate) : null,
+    };
+
+    // Add batch relation if batchId is provided
+    if (batchId) {
+      studentData.batch = {
+        connect: {
+          id: batchId,
+        },
+      };
+    }
+
+    // Create student
     const student = await prisma.student.create({
-      data: {
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
-        phone: phone.trim(),
-        address: address || null,
-        rollNo: rollNo || null, // Using rollNo (schema field)
-        enrollmentNo: enrollmentNo || null,
-        examRollNumber: examRollNumber || null,
-        enrollmentDate: enrollmentDate ? new Date(enrollmentDate) : new Date(),
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        bloodGroup: bloodGroup || null,
-        guardianName: guardianName || null,
-        guardianContact: guardianContact || null,
-        guardianEmail: guardianEmail || null,
-        emergencyContact: emergencyContact || null,
-        profilePicture: photoPath,
-        batchId: batchId ? parseInt(batchId) : null,
-        status: status || 'active',
-      },
+      data: studentData,
       include: {
         batch: {
           include: {
@@ -340,50 +316,51 @@ export async function POST(request) {
       },
     });
 
-    // In the POST method, after creating the student, if batchId is provided,
-    // automatically enroll the student in classrooms of that batch
-
-    // After creating the student, add this code:
-
-    // Auto-enroll student in classrooms of the same batch
-    if (batchId && status === 'active') {
-      const batchClassrooms = await prisma.classroom.findMany({
-        where: {
-          batchId: parseInt(batchId),
-          status: 'active', // If classroom has status field
-        },
-      });
-
-      if (batchClassrooms.length > 0) {
-        const enrollments = batchClassrooms.map((classroom) => ({
-          studentId: student.id,
-          classroomId: classroom.id,
-          enrolledAt: new Date(),
-          status: 'active',
-        }));
-
-        await prisma.classroomEnrollment.createMany({
-          data: enrollments,
-          skipDuplicates: true,
-        });
-
-        console.log(
-          `Auto-enrolled student ${student.name} in ${batchClassrooms.length} classrooms`
-        );
-      }
-    }
+    // Transform student for frontend compatibility
+    const transformedStudent = {
+      ...student,
+      user: {
+        name: student.name,
+        email: student.email,
+      },
+      rollNumber: student.rollNo,
+      registrationNumber: student.enrollmentNo,
+      photo: student.profilePicture,
+    };
 
     return NextResponse.json(
       {
-        student: formatStudentResponse(student),
         message: 'Student created successfully',
+        student: transformedStudent,
       },
       { status: 201 }
     );
   } catch (error) {
     console.error('Error creating student:', error);
+
+    // Check for specific Prisma errors
+    if (error.code === 'P2002') {
+      const field = error.meta?.target?.[0];
+      let errorMessage = 'A student with this ';
+      if (field === 'email') errorMessage += 'email already exists';
+      else if (field === 'enrollmentNo')
+        errorMessage += 'enrollment number already exists';
+      else if (field === 'examRollNumber')
+        errorMessage += 'exam roll number already exists';
+      else errorMessage += 'information already exists';
+
+      return NextResponse.json({ error: errorMessage }, { status: 400 });
+    }
+
+    if (error.code === 'P2003') {
+      return NextResponse.json(
+        { error: 'Invalid batch selected' },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
+      { error: 'Failed to create student', details: error.message },
       { status: 500 }
     );
   }
