@@ -8,7 +8,8 @@ import ReportCard from '@/components/exam/ReportCard';
 import StudentSelector from '@/components/exam/StudentSelector';
 import CourseAssignmentInline from '@/components/exam/CourseAssignmentInline';
 import ResultsOverviewTable from '@/components/exam/ResultsOverviewTable';
-
+import SemesterWiseReport from '@/components/exam/SemesterWiseReport';
+import ExcelImportModal from '@/components/exam/ExcelImportModal';
 export default function TUExaminationPage() {
   // ===== STATE DECLARATIONS =====
   const [selectedDepartment, setSelectedDepartment] = useState('');
@@ -28,6 +29,7 @@ export default function TUExaminationPage() {
   const [supplementaryAttemptsData, setSupplementaryAttemptsData] = useState(
     {}
   );
+  const [semesterWiseData, setSemesterWiseData] = useState({});
 
   const [currentStudentIndex, setCurrentStudentIndex] = useState(null);
   const [marksData, setMarksData] = useState({});
@@ -36,13 +38,14 @@ export default function TUExaminationPage() {
   const [initializing, setInitializing] = useState(true);
   const [showCourseAssignment, setShowCourseAssignment] = useState(false);
   const [loadingResults, setLoadingResults] = useState(false);
+  const [loadingSemesterReport, setLoadingSemesterReport] = useState(false);
   const [hasExistingResults, setHasExistingResults] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(null);
   const [saveError, setSaveError] = useState(null);
   const [saving, setSaving] = useState(false);
   const [studentSelected, setStudentSelected] = useState(false);
   const [showInactiveStudents, setShowInactiveStudents] = useState(false);
-
+  const [isExcelImportOpen, setIsExcelImportOpen] = useState(false);
   const examCategories = [
     { value: 'regular', label: 'Regular Examination' },
     { value: 'supplementary', label: 'Supplementary Examination' },
@@ -155,88 +158,51 @@ export default function TUExaminationPage() {
     return null;
   }, [sortedStudents, currentStudentIndex]);
 
-  // In TUExaminationPage.jsx, replace the filteredCoursesForEntry useMemo
-
   const filteredCoursesForEntry = useMemo(() => {
-    console.log('=== filteredCoursesForEntry DEBUG ===');
-    console.log('selectedExamCategory:', selectedExamCategory);
-    console.log('currentStudent:', currentStudent?.id, currentStudent?.name);
-    console.log(
-      'coursesForEntry:',
-      coursesForEntry.map((c) => ({ id: c.id, code: c.code }))
-    );
-    console.log('failedStudentsData:', failedStudentsData);
-
     if (selectedExamCategory !== 'supplementary' || !currentStudent) {
-      console.log('Returning all courses (not supplementary or no student)');
       return coursesForEntry;
     }
 
     const studentFailedData = failedStudentsData[currentStudent.id];
-    console.log('Student failed data:', studentFailedData);
+    if (!studentFailedData) return [];
 
-    if (!studentFailedData) {
-      console.log('No failed data for student, returning empty array');
-      return [];
-    }
-
-    // Check all possible places where failed subjects might be stored
     let failedCourseIds = new Set();
 
-    // Check remainingFailedSubjects
     if (
       studentFailedData.remainingFailedSubjects &&
       Array.isArray(studentFailedData.remainingFailedSubjects)
     ) {
       studentFailedData.remainingFailedSubjects.forEach((subject) => {
-        console.log('remainingFailedSubject:', subject);
         if (subject.courseId) failedCourseIds.add(subject.courseId);
         if (subject.id) failedCourseIds.add(subject.id);
       });
     }
 
-    // Check regularFailedSubjects
     if (
       studentFailedData.regularFailedSubjects &&
       Array.isArray(studentFailedData.regularFailedSubjects)
     ) {
       studentFailedData.regularFailedSubjects.forEach((subject) => {
-        console.log('regularFailedSubject:', subject);
         if (subject.courseId) failedCourseIds.add(subject.courseId);
         if (subject.id) failedCourseIds.add(subject.id);
       });
     }
 
-    // Check failedSubjects (from the failed-students API)
     if (
       studentFailedData.failedSubjects &&
       Array.isArray(studentFailedData.failedSubjects)
     ) {
       studentFailedData.failedSubjects.forEach((subject) => {
-        console.log('failedSubject:', subject);
         if (subject.courseId) failedCourseIds.add(subject.courseId);
         if (subject.id) failedCourseIds.add(subject.id);
       });
     }
 
-    console.log('Failed course IDs set:', Array.from(failedCourseIds));
-
-    const filtered = coursesForEntry.filter((course) => {
-      const isFailed =
+    return coursesForEntry.filter(
+      (course) =>
         failedCourseIds.has(course.id) ||
-        failedCourseIds.has(course.id.toString());
-      console.log(
-        `Course ${course.code} (id: ${course.id}): isFailed=${isFailed}`
-      );
-      return isFailed;
-    });
-
-    console.log(
-      'Filtered courses:',
-      filtered.map((c) => ({ id: c.id, code: c.code }))
+        failedCourseIds.has(course.id.toString())
     );
-
-    return filtered;
   }, [
     coursesForEntry,
     selectedExamCategory,
@@ -247,26 +213,6 @@ export default function TUExaminationPage() {
   const isCurrentStudentInactive = useMemo(() => {
     return currentStudent?.status === 'inactive';
   }, [currentStudent]);
-
-  const filteredInactiveCount = useMemo(() => {
-    if (showInactiveStudents) return 0;
-    return allStudents.filter((student) => {
-      if (student.status !== 'inactive') return false;
-      if (!student.inactiveDate || !resultDate) return true;
-      return student.inactiveDate.split('T')[0] <= resultDate;
-    }).length;
-  }, [allStudents, resultDate, showInactiveStudents]);
-
-  const shownInactiveCount = useMemo(() => {
-    if (showInactiveStudents) {
-      return allStudents.filter((s) => s.status === 'inactive').length;
-    }
-    return allStudents.filter((student) => {
-      if (student.status !== 'inactive') return false;
-      if (!student.inactiveDate || !resultDate) return false;
-      return student.inactiveDate.split('T')[0] > resultDate;
-    }).length;
-  }, [allStudents, resultDate, showInactiveStudents]);
 
   // ===== API FUNCTIONS =====
   const fetchDepartments = useCallback(async () => {
@@ -339,39 +285,34 @@ export default function TUExaminationPage() {
     }
   }, [selectedBatch, selectedSemester]);
 
-  // In TUExaminationPage.jsx, update the fetchSupplementaryAttemptsData function:
+  const fetchSemesterWiseData = useCallback(async () => {
+    if (!selectedBatch) return;
 
-  const fetchSupplementaryAttemptsData = useCallback(async () => {
-    if (!selectedBatch || !selectedSemester) {
-      console.log('Skipping fetch - missing batch or semester');
-      return;
-    }
-
+    setLoadingSemesterReport(true);
     try {
-      console.log(
-        'Fetching supplementary attempts for batch:',
-        selectedBatch,
-        'semester:',
-        selectedSemester
+      const response = await fetch(
+        `/api/results/semester-wise?batchId=${selectedBatch}`
       );
-
-      const url = `/api/results/supplementary-attempts?batchId=${selectedBatch}&semester=${selectedSemester}`;
-      const response = await fetch(url);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('Supplementary attempts data received:', data);
+        setSemesterWiseData(data.allSemesterData || {});
+      }
+    } catch (error) {
+      console.error('Error fetching semester-wise data:', error);
+    } finally {
+      setLoadingSemesterReport(false);
+    }
+  }, [selectedBatch]);
 
-        // The API already returns properly formatted data
+  const fetchSupplementaryAttemptsData = useCallback(async () => {
+    if (!selectedBatch || !selectedSemester) return;
+    try {
+      const url = `/api/results/supplementary-attempts?batchId=${selectedBatch}&semester=${selectedSemester}`;
+      const response = await fetch(url);
+      if (response.ok) {
+        const data = await response.json();
         setSupplementaryAttemptsData(data.attemptsByStudent || {});
       } else {
-        console.error(
-          'Failed to fetch supplementary attempts:',
-          response.status
-        );
-        // Try to get error details
-        const errorText = await response.text();
-        console.error('Error details:', errorText);
         setSupplementaryAttemptsData({});
       }
     } catch (error) {
@@ -380,33 +321,16 @@ export default function TUExaminationPage() {
     }
   }, [selectedBatch, selectedSemester]);
 
-  // In TUExaminationPage.jsx, update fetchFailedStudentsForSupplementary
-
   const fetchFailedStudentsForSupplementary = useCallback(async () => {
     if (!selectedBatch || !selectedSemester) return;
     try {
       const url = `/api/results/failed-students?batchId=${selectedBatch}&semester=${selectedSemester}`;
-      console.log('Fetching failed students from:', url);
-
       const response = await fetch(url);
       if (!response.ok) {
-        console.error('Failed to fetch failed students:', response.status);
         setFailedStudentsData({});
         return;
       }
       const data = await response.json();
-      console.log('Failed students API response:', data);
-      console.log('failedStudentsData structure:', data.failedStudentsData);
-
-      // Log the structure for the first student to understand the data format
-      const firstStudentId = Object.keys(data.failedStudentsData || {})[0];
-      if (firstStudentId) {
-        console.log(
-          `Example student ${firstStudentId} data:`,
-          data.failedStudentsData[firstStudentId]
-        );
-      }
-
       setFailedStudentsData(data.failedStudentsData || {});
     } catch (error) {
       console.error('Error fetching failed students:', error);
@@ -591,28 +515,19 @@ export default function TUExaminationPage() {
     setStudentSelected(true);
   }, []);
 
-  // In TUExaminationPage.jsx, verify the handleMarksChange function
-
   const handleMarksChange = useCallback((studentId, courseId, field, value) => {
     setMarksData((prev) => {
       const currentStudentMarks = prev[studentId] || {};
       const currentCourseMarks = currentStudentMarks[courseId] || {};
 
-      // Ensure we properly store the value, especially for 0
-      const updatedCourseMarks = {
-        ...currentCourseMarks,
-        [field]: value,
-      };
-
-      console.log(
-        `Marks change - Student: ${studentId}, Course: ${courseId}, Field: ${field}, Value: ${value} (type: ${typeof value})`
-      );
-
       return {
         ...prev,
         [studentId]: {
           ...currentStudentMarks,
-          [courseId]: updatedCourseMarks,
+          [courseId]: {
+            ...currentCourseMarks,
+            [field]: value,
+          },
         },
       };
     });
@@ -677,12 +592,6 @@ export default function TUExaminationPage() {
     [sortedStudents]
   );
 
-  // In TUExaminationPage.jsx, update the handleSaveStudentMarks function
-
-  // In TUExaminationPage.jsx, update the handleSaveStudentMarks function
-
-  // In TUExaminationPage.jsx, replace the handleSaveStudentMarks function
-
   const handleSaveStudentMarks = useCallback(
     async (studentId) => {
       if (!selectedBatch || !selectedExamCategory) {
@@ -705,122 +614,42 @@ export default function TUExaminationPage() {
             ? filteredCoursesForEntry
             : coursesForEntry;
 
-        console.log('=== SAVE DEBUG ===');
-        console.log('Student ID:', studentId);
-        console.log('Exam Category:', selectedExamCategory);
-        console.log(
-          'Courses to use:',
-          coursesToUse.map((c) => ({ id: c.id, code: c.code }))
-        );
-        console.log('Student marks keys:', Object.keys(studentMarks));
-        console.log(
-          'Full student marks:',
-          JSON.stringify(studentMarks, null, 2)
-        );
-
-        // Build a map of course IDs for quick lookup
         const courseIdMap = new Map();
         coursesToUse.forEach((course) => {
           courseIdMap.set(course.id.toString(), course);
           courseIdMap.set(course.id, course);
         });
 
-        // FIXED: Properly check for valid grades including 0
         const results = [];
 
         Object.entries(studentMarks).forEach(([courseId, data]) => {
-          console.log(`Processing course ${courseId}:`, data);
-
-          // Check if this course is in the coursesToUse list (try both string and number)
           const course =
             courseIdMap.get(courseId) || courseIdMap.get(parseInt(courseId));
+          if (!course) return;
 
-          if (!course) {
-            console.log(`  Course ${courseId} NOT found in coursesToUse`);
-            return;
-          }
-
-          console.log(`  Course ${courseId} FOUND: ${course.code}`);
-
-          // Check if gradePoint exists and is a valid number (including 0)
           const gradePoint = data.gradePoint;
           const hasValue =
             gradePoint !== undefined &&
             gradePoint !== null &&
             gradePoint !== '';
 
-          console.log(
-            `  gradePoint=${gradePoint}, hasValue=${hasValue}, type=${typeof gradePoint}`
-          );
-
           if (hasValue) {
             const parsedGrade = parseFloat(gradePoint);
-            console.log(
-              `  parsedGrade=${parsedGrade}, isNaN=${isNaN(parsedGrade)}`
-            );
-
             if (!isNaN(parsedGrade)) {
               results.push({
                 courseId: parseInt(courseId),
                 gradePoint: parsedGrade,
               });
-              console.log(
-                `  ADDED to results: courseId=${courseId}, gradePoint=${parsedGrade}`
-              );
             }
           }
         });
-
-        console.log('Final results array:', results);
-        console.log('Results length:', results.length);
 
         if (results.length === 0) {
-          // Count how many grades were actually entered
-          const enteredGrades = Object.entries(studentMarks).filter(
-            ([_, data]) => {
-              const gp = data.gradePoint;
-              return gp !== undefined && gp !== null && gp !== '';
-            }
+          setSaveError(
+            'Please enter at least one grade (including 0) to save.'
           );
-
-          console.log('Entered grades:', enteredGrades);
-
-          // Check if the issue is course ID mismatch
-          const enteredCourseIds = enteredGrades.map(([id]) => id);
-          const availableCourseIds = coursesToUse.map((c) => c.id.toString());
-
-          console.log('Entered course IDs:', enteredCourseIds);
-          console.log('Available course IDs:', availableCourseIds);
-
-          const mismatch = enteredCourseIds.filter(
-            (id) => !availableCourseIds.includes(id)
-          );
-          if (mismatch.length > 0) {
-            setSaveError(
-              `Course ID mismatch. Entered: ${enteredCourseIds.join(
-                ', '
-              )}, Available: ${availableCourseIds.join(', ')}`
-            );
-          } else {
-            setSaveError(
-              `No valid grades found. Please enter at least one grade (including 0).`
-            );
-          }
           return;
         }
-
-        console.log('Sending to API:', {
-          studentId: parseInt(studentId),
-          batchId: parseInt(selectedBatch),
-          semester: selectedSemester,
-          examCategory: selectedExamCategory,
-          attempt:
-            selectedExamCategory === 'supplementary'
-              ? supplementaryAttempt
-              : null,
-          resultDate: resultDate,
-          results: results,
-        });
 
         const response = await fetch('/api/results', {
           method: 'POST',
@@ -851,9 +680,9 @@ export default function TUExaminationPage() {
           } courses)`
         );
 
-        // Refresh both regular and supplementary data
         await loadAllExistingResults();
         await fetchSupplementaryAttemptsData();
+        await fetchSemesterWiseData();
       } catch (error) {
         console.error('Error saving results:', error);
         setSaveError(error.message);
@@ -872,10 +701,9 @@ export default function TUExaminationPage() {
       filteredCoursesForEntry,
       loadAllExistingResults,
       fetchSupplementaryAttemptsData,
+      fetchSemesterWiseData,
     ]
   );
-
-  // In TUExaminationPage.jsx, update the handleSaveAllMarks function
 
   const handleSaveAllMarks = useCallback(async () => {
     if (!selectedBatch || !selectedExamCategory) {
@@ -892,17 +720,14 @@ export default function TUExaminationPage() {
     setSaveSuccess(null);
 
     try {
-      // FIXED: Properly check for valid grades including 0
       const allMarks = Object.entries(marksData)
         .map(([studentId, studentMarks]) => {
           const results = Object.entries(studentMarks)
             .map(([courseId, data]) => {
-              // Check if gradePoint exists and is a valid number (including 0)
               const hasValue =
                 data.gradePoint !== undefined &&
                 data.gradePoint !== null &&
                 data.gradePoint !== '';
-
               return {
                 courseId: parseInt(courseId),
                 gradePoint: hasValue ? parseFloat(data.gradePoint) : null,
@@ -910,10 +735,7 @@ export default function TUExaminationPage() {
             })
             .filter((r) => r.gradePoint !== null && !isNaN(r.gradePoint));
 
-          return {
-            studentId: parseInt(studentId),
-            results,
-          };
+          return { studentId: parseInt(studentId), results };
         })
         .filter((s) => s.results.length > 0);
 
@@ -924,11 +746,8 @@ export default function TUExaminationPage() {
         return;
       }
 
-      console.log(`Saving marks for ${allMarks.length} students`);
-
       let savedCount = 0;
       let failedCount = 0;
-      const errors = [];
 
       for (const studentData of allMarks) {
         try {
@@ -953,17 +772,10 @@ export default function TUExaminationPage() {
             savedCount++;
           } else {
             failedCount++;
-            const error = await response.json().catch(() => ({}));
-            errors.push(
-              `Student ${studentData.studentId}: ${
-                error.error || 'Unknown error'
-              }`
-            );
           }
         } catch (err) {
           failedCount++;
           console.error(`Error saving student ${studentData.studentId}:`, err);
-          errors.push(`Student ${studentData.studentId}: ${err.message}`);
         }
       }
 
@@ -976,15 +788,12 @@ export default function TUExaminationPage() {
       }
 
       if (failedCount > 0) {
-        console.error('Save errors:', errors);
-        setSaveError(
-          `${failedCount} student(s) failed to save. Check console for details.`
-        );
+        setSaveError(`${failedCount} student(s) failed to save.`);
       }
 
-      // Refresh data
       await loadAllExistingResults();
       await fetchSupplementaryAttemptsData();
+      await fetchSemesterWiseData();
     } catch (error) {
       console.error('Error saving all results:', error);
       setSaveError(error.message);
@@ -1000,7 +809,9 @@ export default function TUExaminationPage() {
     marksData,
     loadAllExistingResults,
     fetchSupplementaryAttemptsData,
+    fetchSemesterWiseData,
   ]);
+
   const handleCoursesAssigned = useCallback(() => {
     fetchAssignedCourses();
     setShowCourseAssignment(false);
@@ -1034,7 +845,10 @@ export default function TUExaminationPage() {
   }, [selectedDepartment, fetchBatches]);
 
   useEffect(() => {
-    if (selectedBatch) fetchStudents(selectedBatch);
+    if (selectedBatch) {
+      fetchStudents(selectedBatch);
+      fetchSemesterWiseData();
+    }
     setSelectedSemester('');
     setAssignedCourses([]);
     setMarksData({});
@@ -1043,15 +857,12 @@ export default function TUExaminationPage() {
     setResultDate('');
     setFailedStudentsData({});
     setSupplementaryAttemptsData({});
-  }, [selectedBatch, fetchStudents]);
-
-  // Update the useEffect in TUExaminationPage.jsx
+  }, [selectedBatch, fetchStudents, fetchSemesterWiseData]);
 
   useEffect(() => {
     if (selectedBatch && selectedSemester) {
       fetchAssignedCourses();
       fetchRegularExamResults();
-      // ALWAYS fetch supplementary attempts data, regardless of exam category
       fetchSupplementaryAttemptsData();
       if (selectedExamCategory === 'supplementary') {
         fetchFailedStudentsForSupplementary();
@@ -1102,70 +913,6 @@ export default function TUExaminationPage() {
     supplementaryAttempt,
     loadAllExistingResults,
   ]);
-
-  // Add this helper function at the top of your component, before the state declarations
-
-  const formatAttemptDate = (resultDate) => {
-    if (!resultDate) return 'Date not set';
-    try {
-      const date = new Date(resultDate);
-      // Check if date is valid
-      if (isNaN(date.getTime())) return 'Invalid date';
-      // Check if it's the default epoch date
-      if (
-        date.getFullYear() <= 1970 &&
-        date.getMonth() === 0 &&
-        date.getDate() <= 2
-      ) {
-        return 'Date not recorded';
-      }
-      return date.toLocaleDateString();
-    } catch (error) {
-      return 'Invalid date';
-    }
-  };
-
-  // Then use it in the display:
-  {
-    selectedExamCategory === 'supplementary' && (
-      <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Supplementary Attempt
-        </label>
-        <div className="flex items-center gap-3">
-          <select
-            value={supplementaryAttempt}
-            onChange={handleSupplementaryAttemptChange}
-            className="w-full md:w-48 rounded-lg border border-gray-300 px-3 py-2.5 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
-          >
-            <option value={1}>Attempt 1</option>
-            <option value={2}>Attempt 2</option>
-            <option value={3}>Attempt 3</option>
-            <option value={4}>Attempt 4</option>
-          </select>
-          {supplementaryAttempts.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <p className="text-sm text-purple-700">
-                <Icons.Info size={16} className="inline mr-1" />
-                Previous attempts:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {supplementaryAttempts.map((a) => (
-                  <span
-                    key={a.attemptNumber}
-                    className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded"
-                  >
-                    Attempt {a.attemptNumber} ({formatAttemptDate(a.resultDate)}
-                    )
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   // ===== RENDER =====
   if (initializing) {
@@ -1219,260 +966,275 @@ export default function TUExaminationPage() {
               TU Results Management
             </span>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <Icons.GraduationCap className="text-blue-600" size={28} />
-            TU Results Management
-          </h1>
-          <p className="text-gray-600 mt-1">
-            Enter and edit grades for examinations
-          </p>
-        </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                <Icons.GraduationCap className="text-blue-600" size={28} />
+                TU Results Management
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Enter and edit grades for examinations
+              </p>
+            </div>
 
-        {/* Filters */}
-        <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Department <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={selectedDepartment}
-                onChange={(e) => setSelectedDepartment(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
-                disabled={loading}
+            {/* View Mode Toggle - Main Navigation */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setViewMode('entry');
+                  setStudentSelected(false);
+                  setCurrentStudentIndex(null);
+                }}
+                className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+                  viewMode === 'entry'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
               >
-                <option value="">Select Department</option>
-                {departments.map((dept) => (
-                  <option key={dept.id} value={dept.id}>
-                    {dept.name} ({dept.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Batch <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={selectedBatch}
-                onChange={(e) => setSelectedBatch(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
-                disabled={!selectedDepartment || loading}
+                <Icons.Edit size={16} /> Marks Entry
+              </button>
+              <button
+                onClick={() => {
+                  setViewMode('overview');
+                  setStudentSelected(false);
+                  setCurrentStudentIndex(null);
+                }}
+                className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+                  viewMode === 'overview'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
               >
-                <option value="">Select Batch</option>
-                {batches.map((batch) => (
-                  <option key={batch.id} value={batch.id}>
-                    {batch.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Semester <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={selectedSemester}
-                onChange={(e) => setSelectedSemester(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
-                disabled={!selectedBatch || loading}
+                <Icons.LayoutGrid size={16} /> Overview
+              </button>
+              <button
+                onClick={() => {
+                  setViewMode('semester-report');
+                  setStudentSelected(false);
+                  setCurrentStudentIndex(null);
+                }}
+                className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+                  viewMode === 'semester-report'
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                }`}
               >
-                <option value="">Select Semester</option>
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
-                  <option key={sem} value={`semester${sem}`}>
-                    Semester {sem}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Exam Category
-              </label>
-              <select
-                value={selectedExamCategory}
-                onChange={handleExamCategoryChange}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              >
-                {examCategories.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </select>
+                <Icons.BarChart size={16} /> Semester Report
+              </button>
             </div>
           </div>
+        </div>
 
-          {selectedExamCategory === 'supplementary' && (
-            <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Supplementary Attempt
-              </label>
-              <div className="flex items-center gap-3">
+        {/* Filters - Only show for entry and overview modes */}
+        {viewMode !== 'semester-report' && (
+          <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Department <span className="text-red-500">*</span>
+                </label>
                 <select
-                  value={supplementaryAttempt}
-                  onChange={handleSupplementaryAttemptChange}
-                  className="w-full md:w-48 rounded-lg border border-gray-300 px-3 py-2.5 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  value={selectedDepartment}
+                  onChange={(e) => setSelectedDepartment(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+                  disabled={loading}
                 >
-                  <option value={1}>Attempt 1</option>
-                  <option value={2}>Attempt 2</option>
-                  <option value={3}>Attempt 3</option>
-                  <option value={4}>Attempt 4</option>
+                  <option value="">Select Department</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name} ({dept.code})
+                    </option>
+                  ))}
                 </select>
-                {supplementaryAttempts.length > 0 && (
-                  <p className="text-sm text-purple-700">
-                    <Icons.Info size={16} className="inline mr-1" />
-                    Previous attempts:{' '}
-                    {supplementaryAttempts
-                      .map((a) => {
-                        // Safely format the date
-                        let dateStr = 'Date not set';
-                        if (a.resultDate) {
-                          try {
-                            const date = new Date(a.resultDate);
-                            // Check if date is valid
-                            if (
-                              !isNaN(date.getTime()) &&
-                              date.getFullYear() > 1970
-                            ) {
-                              dateStr = date.toLocaleDateString();
-                            }
-                          } catch (e) {
-                            dateStr = 'Invalid date';
-                          }
-                        }
-                        return `Attempt ${a.attemptNumber} (${dateStr})`;
-                      })
-                      .join(', ')}
-                  </p>
-                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Batch <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedBatch}
+                  onChange={(e) => setSelectedBatch(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+                  disabled={!selectedDepartment || loading}
+                >
+                  <option value="">Select Batch</option>
+                  {batches.map((batch) => (
+                    <option key={batch.id} value={batch.id}>
+                      {batch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Semester <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={selectedSemester}
+                  onChange={(e) => setSelectedSemester(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
+                  disabled={!selectedBatch || loading}
+                >
+                  <option value="">Select Semester</option>
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((sem) => (
+                    <option key={sem} value={`semester${sem}`}>
+                      Semester {sem}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Exam Category
+                </label>
+                <select
+                  value={selectedExamCategory}
+                  onChange={handleExamCategoryChange}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {examCategories.map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
-          )}
-          {/* Supplementary Info */}
-          {selectedExamCategory === 'supplementary' && (
-            <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
-              <div className="flex items-start gap-3">
-                <Icons.AlertTriangle
-                  size={20}
-                  className="text-orange-600 mt-0.5"
-                />
-                <div>
-                  <p className="text-sm font-medium text-orange-800">
-                    Supplementary Examination Mode - Attempt{' '}
-                    {supplementaryAttempt}
-                  </p>
-                  <p className="text-sm text-orange-700 mt-1">
-                    Only showing students who failed in regular examination for{' '}
-                    <span className="font-semibold">
-                      {selectedSemester?.replace('semester', 'Semester ')}
-                    </span>
-                    .
-                  </p>
-                  <p className="text-sm text-orange-600 mt-1">
-                    Failed Students: {sortedStudents.length} | Total Failed
-                    Subjects:{' '}
-                    {Object.values(failedStudentsData).reduce(
-                      (acc, data) => acc + (data.failedCount || 0),
-                      0
-                    )}
-                  </p>
-                  {selectedSemester &&
-                    Object.keys(failedStudentsData).length === 0 && (
-                      <p className="text-sm text-green-600 mt-1">
-                        ✅ All students passed! No supplementary exam needed.
-                      </p>
-                    )}
+
+            {selectedExamCategory === 'supplementary' && (
+              <div className="mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Supplementary Attempt
+                </label>
+                <div className="flex items-center gap-3">
+                  <select
+                    value={supplementaryAttempt}
+                    onChange={handleSupplementaryAttemptChange}
+                    className="w-full md:w-48 rounded-lg border border-gray-300 px-3 py-2.5 focus:border-purple-500 focus:outline-none focus:ring-1 focus:ring-purple-500"
+                  >
+                    <option value={1}>Attempt 1</option>
+                    <option value={2}>Attempt 2</option>
+                    <option value={3}>Attempt 3</option>
+                    <option value={4}>Attempt 4</option>
+                  </select>
                 </div>
               </div>
-            </div>
-          )}
-          {/* Result Date */}
-          {selectedBatch && selectedSemester && (
-            <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Result Date for{' '}
-                {selectedSemester.replace('semester', 'Semester ')} -{' '}
-                {categoryLabel} <span className="text-red-500">*</span>
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  type="date"
-                  value={resultDate}
-                  onChange={handleResultDateChange}
-                  className="w-full md:w-64 rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  max={new Date().toISOString().split('T')[0]}
-                />
-                <p className="text-sm text-gray-600">
-                  <Icons.Info size={16} className="inline mr-1" />
-                  {selectedExamCategory === 'supplementary'
-                    ? `Set result date for attempt ${supplementaryAttempt}`
-                    : 'Students inactive before this date will be hidden'}
-                </p>
+            )}
+
+            {selectedExamCategory === 'supplementary' && (
+              <div className="mt-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <div className="flex items-start gap-3">
+                  <Icons.AlertTriangle
+                    size={20}
+                    className="text-orange-600 mt-0.5"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-orange-800">
+                      Supplementary Examination Mode - Attempt{' '}
+                      {supplementaryAttempt}
+                    </p>
+                    <p className="text-sm text-orange-700 mt-1">
+                      Only showing students who failed in regular examination
+                      for{' '}
+                      <span className="font-semibold">
+                        {selectedSemester?.replace('semester', 'Semester ')}
+                      </span>
+                      .
+                    </p>
+                    <p className="text-sm text-orange-600 mt-1">
+                      Failed Students: {sortedStudents.length} | Total Failed
+                      Subjects:{' '}
+                      {Object.values(failedStudentsData).reduce(
+                        (acc, data) => acc + (data.failedCount || 0),
+                        0
+                      )}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
-          {/* Summary Bar */}
-          {selectedDepartment && selectedBatch && selectedSemester && (
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <div className="flex items-center gap-6 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <Icons.Building size={16} className="text-blue-600" />
-                  <span className="text-sm">
-                    <span className="text-gray-600">Dept:</span>{' '}
-                    <span className="font-medium">
-                      {selectedDepartmentName}
-                    </span>
-                  </span>
+            )}
+
+            {selectedBatch && selectedSemester && (
+              <div className="mt-4 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Result Date for{' '}
+                  {selectedSemester.replace('semester', 'Semester ')} -{' '}
+                  {categoryLabel} <span className="text-red-500">*</span>
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="date"
+                    value={resultDate}
+                    onChange={handleResultDateChange}
+                    className="w-full md:w-64 rounded-lg border border-gray-300 px-3 py-2.5 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    max={new Date().toISOString().split('T')[0]}
+                  />
                 </div>
-                <div className="flex items-center gap-2">
-                  <Icons.Users size={16} className="text-blue-600" />
-                  <span className="text-sm">
-                    <span className="text-gray-600">Batch:</span>{' '}
-                    <span className="font-medium">{selectedBatchName}</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Icons.BookOpen size={16} className="text-blue-600" />
-                  <span className="text-sm">
-                    <span className="text-gray-600">Semester:</span>{' '}
-                    <span className="font-medium">
-                      {selectedSemester.replace('semester', 'Semester ')}
-                    </span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Icons.LayoutGrid size={16} className="text-blue-600" />
-                  <span className="text-sm">
-                    <span className="text-gray-600">Courses:</span>{' '}
-                    <span className="font-medium">{sortedCourses.length}</span>
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Icons.UserCheck size={16} className="text-blue-600" />
-                  <span className="text-sm">
-                    <span className="text-gray-600">Students:</span>{' '}
-                    <span className="font-medium">{sortedStudents.length}</span>
-                  </span>
-                </div>
-                {resultDate && (
+                <button
+                  onClick={() => setIsExcelImportOpen(true)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                >
+                  <Icons.FileSpreadsheet size={16} />
+                  Import Excel
+                </button>
+              </div>
+            )}
+
+            {selectedDepartment && selectedBatch && selectedSemester && (
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-6 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <Icons.Calendar size={16} className="text-blue-600" />
+                    <Icons.Building size={16} className="text-blue-600" />
                     <span className="text-sm">
-                      <span className="text-gray-600">Result Date:</span>{' '}
+                      <span className="text-gray-600">Dept:</span>{' '}
                       <span className="font-medium">
-                        {new Date(resultDate).toLocaleDateString()}
+                        {selectedDepartmentName}
                       </span>
                     </span>
                   </div>
-                )}
+                  <div className="flex items-center gap-2">
+                    <Icons.Users size={16} className="text-blue-600" />
+                    <span className="text-sm">
+                      <span className="text-gray-600">Batch:</span>{' '}
+                      <span className="font-medium">{selectedBatchName}</span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Icons.BookOpen size={16} className="text-blue-600" />
+                    <span className="text-sm">
+                      <span className="text-gray-600">Semester:</span>{' '}
+                      <span className="font-medium">
+                        {selectedSemester.replace('semester', 'Semester ')}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Icons.LayoutGrid size={16} className="text-blue-600" />
+                    <span className="text-sm">
+                      <span className="text-gray-600">Courses:</span>{' '}
+                      <span className="font-medium">
+                        {sortedCourses.length}
+                      </span>
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Icons.UserCheck size={16} className="text-blue-600" />
+                    <span className="text-sm">
+                      <span className="text-gray-600">Students:</span>{' '}
+                      <span className="font-medium">
+                        {sortedStudents.length}
+                      </span>
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Course Assignment */}
-        {selectedBatch &&
+        {viewMode !== 'semester-report' &&
+          selectedBatch &&
           selectedSemester &&
           sortedCourses.length === 0 &&
           !loading && (
@@ -1509,97 +1271,87 @@ export default function TUExaminationPage() {
             </div>
           )}
 
-        {/* Student Selector */}
-        {sortedCourses.length > 0 && sortedStudents.length > 0 && (
-          <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
-            <StudentSelector
-              students={sortedStudents}
-              currentIndex={currentStudentIndex}
-              onSelect={handleStudentSelect}
-              marksData={marksData}
-              courses={coursesToDisplay}
-            />
-            {!studentSelected && (
-              <p className="text-center text-gray-500 text-sm mt-3">
-                👆 Click on a student to enter marks
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* View Mode Toggle */}
-        {studentSelected && currentStudent && viewMode !== 'overview' && (
-          <div className="flex gap-2 mb-6 items-center justify-between">
-            <div className="flex gap-2">
-              <button
-                onClick={() => setViewMode('entry')}
-                className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-                  viewMode === 'entry'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-                disabled={isCurrentStudentInactive}
-              >
-                <Icons.Edit size={16} /> Marks Entry
-              </button>
-              <button
-                onClick={() => setViewMode('report')}
-                className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-                  viewMode === 'report'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <Icons.FileText size={16} /> Report Card
-              </button>
+        {/* Student Selector - For entry mode */}
+        {viewMode === 'entry' &&
+          sortedCourses.length > 0 &&
+          sortedStudents.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm p-4 mb-6">
+              <StudentSelector
+                students={sortedStudents}
+                currentIndex={currentStudentIndex}
+                onSelect={handleStudentSelect}
+                marksData={marksData}
+                courses={coursesToDisplay}
+              />
+              {!studentSelected && (
+                <p className="text-center text-gray-500 text-sm mt-3">
+                  👆 Click on a student to enter marks
+                </p>
+              )}
             </div>
-            {isCurrentStudentInactive && (
-              <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg">
-                <Icons.AlertTriangle size={16} />
-                <span className="text-sm">
-                  Student is inactive - cannot edit
-                </span>
-              </div>
-            )}
-          </div>
-        )}
+          )}
 
-        {/* Overview Toggle */}
-        {sortedCourses.length > 0 && sortedStudents.length > 0 && (
-          <div className="flex justify-end mb-4">
-            <button
-              onClick={() => {
-                setViewMode('overview');
-                setStudentSelected(false);
-                setCurrentStudentIndex(null);
-              }}
-              className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
-                viewMode === 'overview'
-                  ? 'bg-purple-600 text-white'
-                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              <Icons.LayoutGrid size={16} />{' '}
-              {viewMode === 'overview'
-                ? 'Overview View'
-                : 'Show All Results Overview'}
-            </button>
-            {viewMode === 'overview' && (
-              <button
-                onClick={() => setViewMode('entry')}
-                className="ml-3 px-4 py-2 rounded-lg font-medium bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
-              >
-                <Icons.ArrowLeft size={16} /> Back to Entry
-              </button>
-            )}
-          </div>
-        )}
+        {/* View Mode Toggle - For entry/report modes */}
+        {viewMode !== 'semester-report' &&
+          studentSelected &&
+          currentStudent &&
+          viewMode !== 'overview' && (
+            <div className="flex gap-2 mb-6 items-center justify-between">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setViewMode('entry')}
+                  className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+                    viewMode === 'entry'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  }`}
+                  disabled={isCurrentStudentInactive}
+                >
+                  <Icons.Edit size={16} /> Marks Entry
+                </button>
+                <button
+                  onClick={() => setViewMode('report')}
+                  className={`px-4 py-2 rounded-lg font-medium flex items-center gap-2 ${
+                    viewMode === 'report'
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <Icons.FileText size={16} /> Report Card
+                </button>
+              </div>
+              {isCurrentStudentInactive && (
+                <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg">
+                  <Icons.AlertTriangle size={16} />
+                  <span className="text-sm">
+                    Student is inactive - cannot edit
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
 
         {/* Main Content */}
         {loading ? (
           <div className="flex justify-center py-12">
             <Icons.Loader2 size={32} className="animate-spin text-blue-600" />
           </div>
+        ) : viewMode === 'semester-report' ? (
+          loadingSemesterReport ? (
+            <div className="flex justify-center py-12">
+              <Icons.Loader2
+                size={32}
+                className="animate-spin text-indigo-600"
+              />
+            </div>
+          ) : (
+            <SemesterWiseReport
+              students={allStudents.filter((s) => s.status === 'active')}
+              allSemesterData={semesterWiseData}
+              batchName={selectedBatchName || 'All Batches'}
+              departmentName={selectedDepartmentName || 'All Departments'}
+            />
+          )
         ) : !selectedDepartment ? (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center">
             <Icons.Building size={48} className="mx-auto text-gray-300 mb-4" />
@@ -1661,30 +1413,26 @@ export default function TUExaminationPage() {
           currentStudent &&
           !isCurrentStudentInactive ? (
           <>
-            {viewMode === 'entry' &&
-            currentStudent &&
-            !isCurrentStudentInactive ? (
-              <MarksEntryGrid
-                student={currentStudent}
-                courses={coursesForEntry}
-                marksData={marksData[currentStudent?.id] || {}}
-                onMarksChange={handleMarksChange}
-                onSave={() => handleSaveStudentMarks(currentStudent?.id)}
-                saving={saving}
-                examCategory={selectedExamCategory}
-                failedSubjectsData={
-                  selectedExamCategory === 'supplementary'
-                    ? failedStudentsData[currentStudent?.id] || null
-                    : null
-                }
-                regularResults={
-                  selectedExamCategory === 'supplementary' &&
-                  regularResults[currentStudent?.id]
-                    ? regularResults[currentStudent?.id]
-                    : null
-                }
-              />
-            ) : null}
+            <MarksEntryGrid
+              student={currentStudent}
+              courses={coursesForEntry}
+              marksData={marksData[currentStudent?.id] || {}}
+              onMarksChange={handleMarksChange}
+              onSave={() => handleSaveStudentMarks(currentStudent?.id)}
+              saving={saving}
+              examCategory={selectedExamCategory}
+              failedSubjectsData={
+                selectedExamCategory === 'supplementary'
+                  ? failedStudentsData[currentStudent?.id] || null
+                  : null
+              }
+              regularResults={
+                selectedExamCategory === 'supplementary' &&
+                regularResults[currentStudent?.id]
+                  ? regularResults[currentStudent?.id]
+                  : null
+              }
+            />
             <div className="flex justify-between mt-6">
               <button
                 onClick={() =>
@@ -1733,6 +1481,23 @@ export default function TUExaminationPage() {
             resultDate={resultDate}
           />
         ) : null}
+        <ExcelImportModal
+          isOpen={isExcelImportOpen}
+          onClose={() => setIsExcelImportOpen(false)}
+          batchId={selectedBatch}
+          semester={selectedSemester}
+          examCategory={selectedExamCategory}
+          attempt={
+            selectedExamCategory === 'supplementary'
+              ? supplementaryAttempt
+              : null
+          }
+          resultDate={resultDate}
+          onSuccess={() => {
+            setIsExcelImportOpen(false);
+            handleRefresh(); // Refresh data after import
+          }}
+        />
       </div>
     </div>
   );
