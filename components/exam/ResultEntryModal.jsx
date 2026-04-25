@@ -5,6 +5,75 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
 
+// GPA Grading System based on Percentage
+const GRADE_SYSTEM = [
+  {
+    min: 90,
+    max: 100,
+    grade: 'A+',
+    gpa: 4.0,
+    color: 'bg-green-100 text-green-800 border-green-300',
+  },
+  {
+    min: 80,
+    max: 89,
+    grade: 'A',
+    gpa: 3.6,
+    color: 'bg-green-50 text-green-700 border-green-200',
+  },
+  {
+    min: 70,
+    max: 79,
+    grade: 'B+',
+    gpa: 3.2,
+    color: 'bg-blue-100 text-blue-800 border-blue-300',
+  },
+  {
+    min: 60,
+    max: 69,
+    grade: 'B',
+    gpa: 2.8,
+    color: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
+  {
+    min: 50,
+    max: 59,
+    grade: 'C+',
+    gpa: 2.4,
+    color: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+  },
+  {
+    min: 40,
+    max: 49,
+    grade: 'C',
+    gpa: 2.0,
+    color: 'bg-orange-100 text-orange-800 border-orange-300',
+  },
+  {
+    min: 30,
+    max: 39,
+    grade: 'D+',
+    gpa: 1.6,
+    color: 'bg-red-100 text-red-800 border-red-200',
+  },
+  {
+    min: 20,
+    max: 29,
+    grade: 'D',
+    gpa: 1.2,
+    color: 'bg-red-50 text-red-700 border-red-200',
+  },
+  {
+    min: 0,
+    max: 19,
+    grade: 'E',
+    gpa: 0.8,
+    color: 'bg-gray-100 text-gray-800 border-gray-300',
+  },
+];
+
+const PASS_PERCENTAGE = 40; // 40% is passing (C grade or above)
+
 export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
   const [students, setStudents] = useState([]);
   const [marks, setMarks] = useState({});
@@ -12,49 +81,26 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [error, setError] = useState(null);
+  const [examTypeInfo, setExamTypeInfo] = useState(null);
 
-  // GPA Grading System
-  const gradeSystem = [
-    {
-      grade: 'A',
-      minGPA: 3.71,
-      maxGPA: 4.0,
-      color: 'bg-green-100 text-green-800 border-green-300',
-    },
-    {
-      grade: 'A-',
-      minGPA: 3.31,
-      maxGPA: 3.7,
-      color: 'bg-green-50 text-green-700 border-green-200',
-    },
-    {
-      grade: 'B+',
-      minGPA: 3.01,
-      maxGPA: 3.3,
-      color: 'bg-blue-100 text-blue-800 border-blue-300',
-    },
-    {
-      grade: 'B',
-      minGPA: 2.71,
-      maxGPA: 3.0,
-      color: 'bg-blue-50 text-blue-700 border-blue-200',
-    },
-    {
-      grade: 'B-',
-      minGPA: 2.31,
-      maxGPA: 2.7,
-      color: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-    },
-    {
-      grade: 'C+',
-      minGPA: 2.0,
-      maxGPA: 2.3,
-      color: 'bg-orange-100 text-orange-800 border-orange-300',
-    },
-  ];
+  // Fetch exam type details for full marks configuration
+  useEffect(() => {
+    if (isOpen && exam?.examTypeId) {
+      fetchExamType();
+    }
+  }, [isOpen, exam?.examTypeId]);
 
-  // Pass threshold: GPA >= 2.0 (C+ or above)
-  const PASS_GPA = 2.0;
+  const fetchExamType = async () => {
+    try {
+      const response = await fetch(`/api/exam-types/${exam.examTypeId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setExamTypeInfo(data);
+      }
+    } catch (error) {
+      console.error('Error fetching exam type:', error);
+    }
+  };
 
   useEffect(() => {
     if (isOpen && exam) {
@@ -127,8 +173,11 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
         resultsArray.forEach((result) => {
           if (result?.studentId) {
             marksMap[result.studentId] = {
-              gpa: result.gradePoint || result.gpa || '',
+              obtainedMarks: result.obtainedMarks || '',
+              fullMarks: result.fullMarks || exam.fullMarks || 100,
+              percentage: result.percentage || '',
               grade: result.grade || '',
+              gpa: result.gpa || '',
               remarks: result.remarks || '',
             };
           }
@@ -140,52 +189,67 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
     }
   };
 
-  // Calculate grade based on GPA
-  const calculateGrade = (gpa) => {
-    if (gpa === '' || gpa === null || gpa === undefined || isNaN(gpa)) {
-      return { grade: null, isPass: false };
-    }
+  // Calculate percentage and GPA from marks
+  const calculateFromMarks = (obtainedMarks, fullMarks) => {
+    const obtained = parseFloat(obtainedMarks) || 0;
+    const full = parseFloat(fullMarks) || 100;
 
-    const numGPA = parseFloat(gpa);
+    // Calculate percentage
+    const percentage = full > 0 ? (obtained / full) * 100 : 0;
 
-    for (const gradeInfo of gradeSystem) {
-      if (numGPA >= gradeInfo.minGPA && numGPA <= gradeInfo.maxGPA) {
-        return {
-          grade: gradeInfo.grade,
-          isPass: true,
-          color: gradeInfo.color,
-        };
-      }
-    }
+    // Find grade based on percentage
+    const gradeInfo = GRADE_SYSTEM.find(
+      (g) => percentage >= g.min && percentage <= g.max
+    );
 
-    // Below 2.0 is fail
     return {
-      grade: 'F',
-      isPass: false,
-      color: 'bg-red-100 text-red-800 border-red-300',
+      percentage: percentage.toFixed(2),
+      grade: gradeInfo?.grade || 'N/A',
+      gpa: gradeInfo?.gpa || 0,
+      isPass: percentage >= PASS_PERCENTAGE,
+      gradeColor: gradeInfo?.color || 'bg-gray-100 text-gray-800',
     };
   };
 
-  const handleGPAChange = (studentId, value) => {
-    const numValue = value === '' ? '' : parseFloat(value);
-    if (
-      numValue !== '' &&
-      (isNaN(numValue) || numValue < 0 || numValue > 4.0)
-    ) {
-      return;
-    }
+  // Handle marks input change
+  const handleMarksChange = (studentId, field, value) => {
+    const currentMarks = marks[studentId] || {
+      obtainedMarks: '',
+      fullMarks: exam?.fullMarks || examTypeInfo?.fullMarks || 100,
+      remarks: '',
+    };
 
-    const { grade, isPass, color } = calculateGrade(numValue);
+    let updatedMarks = { ...currentMarks, [field]: value };
+
+    // Auto-calculate if both obtained and full marks are present
+    if (field === 'obtainedMarks' || field === 'fullMarks') {
+      const obtained =
+        field === 'obtainedMarks' ? value : currentMarks.obtainedMarks;
+      const full = field === 'fullMarks' ? value : currentMarks.fullMarks;
+
+      if (
+        obtained !== '' &&
+        obtained !== undefined &&
+        full !== '' &&
+        full !== undefined
+      ) {
+        const calculated = calculateFromMarks(obtained, full);
+        updatedMarks = {
+          ...updatedMarks,
+          ...calculated,
+        };
+      } else {
+        // Clear calculated fields if marks are incomplete
+        updatedMarks.percentage = '';
+        updatedMarks.grade = '';
+        updatedMarks.gpa = '';
+        updatedMarks.isPass = false;
+      }
+    }
 
     setMarks((prev) => ({
       ...prev,
-      [studentId]: {
-        ...prev[studentId],
-        gpa: numValue,
-        grade: grade,
-        isPass: isPass,
-        gradeColor: color,
-      },
+      [studentId]: updatedMarks,
     }));
   };
 
@@ -199,6 +263,31 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
     }));
   };
 
+  // Bulk fill all students with same full marks
+  const handleBulkFullMarks = (fullMarksValue) => {
+    const fullMarks = parseFloat(fullMarksValue);
+    if (isNaN(fullMarks) || fullMarks <= 0) return;
+
+    const updatedMarks = { ...marks };
+    students.forEach((student) => {
+      const current = updatedMarks[student.id] || {};
+      updatedMarks[student.id] = {
+        ...current,
+        fullMarks: fullMarks,
+      };
+
+      // Recalculate if obtained marks exist
+      if (current.obtainedMarks && current.obtainedMarks !== '') {
+        const calculated = calculateFromMarks(current.obtainedMarks, fullMarks);
+        updatedMarks[student.id] = {
+          ...updatedMarks[student.id],
+          ...calculated,
+        };
+      }
+    });
+    setMarks(updatedMarks);
+  };
+
   const handleSaveAll = async () => {
     setSaving(true);
     setError(null);
@@ -207,21 +296,29 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
       const results = studentArray
         .map((student) => {
           const studentMarks = marks[student.id];
-          const gpa = studentMarks?.gpa;
-          const { grade, isPass } = calculateGrade(gpa);
+          if (
+            !studentMarks ||
+            studentMarks.obtainedMarks === '' ||
+            studentMarks.obtainedMarks === undefined
+          ) {
+            return null;
+          }
 
           return {
             studentId: student.id,
-            gpa: gpa !== '' && !isNaN(gpa) ? parseFloat(gpa) : null,
-            grade: grade,
-            isPass: isPass,
-            remarks: studentMarks?.remarks || '',
+            obtainedMarks: parseFloat(studentMarks.obtainedMarks),
+            fullMarks: parseFloat(studentMarks.fullMarks),
+            percentage: parseFloat(studentMarks.percentage),
+            grade: studentMarks.grade,
+            gpa: parseFloat(studentMarks.gpa),
+            isPass: studentMarks.isPass,
+            remarks: studentMarks.remarks || '',
           };
         })
-        .filter((r) => r.gpa !== null);
+        .filter((r) => r !== null);
 
       if (results.length === 0) {
-        setError('Please enter GPA for at least one student');
+        setError('Please enter marks for at least one student');
         setSaving(false);
         return;
       }
@@ -231,7 +328,7 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           results,
-          gradeSystem,
+          gradeSystem: GRADE_SYSTEM,
         }),
       });
 
@@ -250,7 +347,6 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
     }
   };
 
-  // Safely filter students
   const filteredStudents = useMemo(() => {
     const studentArray = Array.isArray(students) ? students : [];
     if (studentArray.length === 0) return [];
@@ -266,43 +362,33 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
     });
   }, [students, searchTerm]);
 
-  const getGPAStatus = (gpa) => {
-    if (gpa === '' || gpa === null || gpa === undefined || isNaN(gpa)) {
-      return 'pending';
-    }
-    const { isPass } = calculateGrade(gpa);
-    return isPass ? 'pass' : 'fail';
-  };
-
-  const getGradeColor = (grade) => {
-    const gradeInfo = gradeSystem.find((g) => g.grade === grade);
-    return gradeInfo?.color || 'bg-gray-100 text-gray-800 border-gray-300';
-  };
-
   const stats = useMemo(() => {
     const studentArray = Array.isArray(students) ? students : [];
     const marksArray = Object.values(marks || {});
 
-    const enteredGPAs = marksArray.filter(
-      (m) => m?.gpa !== '' && m?.gpa !== null && !isNaN(m?.gpa)
+    const enteredMarks = marksArray.filter(
+      (m) =>
+        m?.obtainedMarks !== '' &&
+        m?.obtainedMarks !== undefined &&
+        m?.obtainedMarks !== null
     );
 
-    const passCount = enteredGPAs.filter((m) => {
-      const { isPass } = calculateGrade(m.gpa);
-      return isPass;
-    }).length;
+    const passCount = enteredMarks.filter((m) => m?.isPass === true).length;
+
+    const totalPercentage = enteredMarks.reduce(
+      (sum, m) => sum + (parseFloat(m.percentage) || 0),
+      0
+    );
 
     return {
       total: studentArray.length,
-      entered: enteredGPAs.length,
+      entered: enteredMarks.length,
       pass: passCount,
-      fail: enteredGPAs.length - passCount,
-      averageGPA:
-        enteredGPAs.length > 0
-          ? (
-              enteredGPAs.reduce((sum, m) => sum + parseFloat(m.gpa), 0) /
-              enteredGPAs.length
-            ).toFixed(2)
+      fail: enteredMarks.length - passCount,
+      pending: studentArray.length - enteredMarks.length,
+      averagePercentage:
+        enteredMarks.length > 0
+          ? (totalPercentage / enteredMarks.length).toFixed(2)
           : '0.00',
     };
   }, [students, marks]);
@@ -324,6 +410,9 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
     });
   };
 
+  // Get default full marks from exam or exam type
+  const defaultFullMarks = exam?.fullMarks || examTypeInfo?.fullMarks || 100;
+
   if (!isOpen) return null;
 
   return (
@@ -341,20 +430,20 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
-          className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-5xl"
+          className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-6xl"
         >
           {/* Header */}
-          <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4">
+          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-semibold text-white flex items-center gap-2">
-                  <Icons.Award size={20} />
-                  Enter GPA Results
+                  <Icons.Edit size={20} />
+                  Enter Exam Marks
                 </h3>
-                <p className="text-purple-100 text-sm mt-1">
+                <p className="text-blue-100 text-sm mt-1">
                   {exam?.name} • {exam?.classroom?.name} • {exam?.batch?.name}
                 </p>
-                <p className="text-purple-100 text-xs mt-0.5">
+                <p className="text-blue-100 text-xs mt-0.5">
                   {formatDate(exam?.date)} • {formatTime(exam?.startTime)} -{' '}
                   {formatTime(exam?.endTime)}
                 </p>
@@ -381,38 +470,35 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
           {/* Grade Scale Reference */}
           <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
             <div className="flex items-center gap-4 text-xs flex-wrap">
-              <span className="text-gray-600 font-medium">Grade Scale:</span>
-              {gradeSystem.map(({ grade, minGPA, maxGPA, color }) => (
+              <span className="text-gray-600 font-medium">Grading Scale:</span>
+              {GRADE_SYSTEM.map(({ grade, min, max, gpa, color }) => (
                 <span key={grade} className="flex items-center gap-1">
                   <span className={`px-2 py-0.5 rounded ${color}`}>
                     {grade}
                   </span>
                   <span className="text-gray-500">
-                    {minGPA.toFixed(2)}-{maxGPA.toFixed(2)}
+                    {min}-{max}% ({gpa})
                   </span>
                 </span>
               ))}
-              <span className="flex items-center gap-1">
-                <span className="px-2 py-0.5 rounded bg-red-100 text-red-800 border-red-300">
-                  F
-                </span>
-                <span className="text-gray-500">&lt;2.00 (Fail)</span>
-              </span>
             </div>
           </div>
 
-          {/* Settings Bar */}
-          <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex items-center gap-6 flex-wrap">
-            <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-lg">
-              <Icons.Info size={14} className="text-blue-600" />
-              <span className="text-xs text-blue-700">
-                Pass: GPA ≥ 2.00 (C+ or above)
-              </span>
-            </div>
-            <div className="flex items-center gap-4 ml-auto">
-              <div className="flex items-center gap-4 text-sm">
+          {/* Stats Bar */}
+          <div className="px-6 py-3 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-center gap-6 flex-wrap">
+              <div className="flex items-center gap-2 px-3 py-1 bg-blue-50 rounded-lg">
+                <Icons.Info size={14} className="text-blue-600" />
+                <span className="text-xs text-blue-700">
+                  Pass: ≥ {PASS_PERCENTAGE}% (C or above)
+                </span>
+              </div>
+              <div className="flex items-center gap-6 text-sm ml-auto">
                 <span className="text-gray-600">
                   Total: <strong>{stats.total}</strong>
+                </span>
+                <span className="text-yellow-600">
+                  Pending: <strong>{stats.pending}</strong>
                 </span>
                 <span className="text-blue-600">
                   Entered: <strong>{stats.entered}</strong>
@@ -424,14 +510,35 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
                   Fail: <strong>{stats.fail}</strong>
                 </span>
                 <span className="text-purple-600">
-                  Avg GPA: <strong>{stats.averageGPA}</strong>
+                  Avg: <strong>{stats.averagePercentage}%</strong>
                 </span>
               </div>
             </div>
           </div>
 
+          {/* Bulk Actions */}
+          <div className="px-6 py-3 border-b border-gray-200 bg-white">
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600">Bulk Actions:</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  placeholder="Set Full Marks"
+                  className="px-3 py-1.5 border border-gray-300 rounded-md text-sm w-32"
+                  onBlur={(e) => handleBulkFullMarks(e.target.value)}
+                />
+                <button
+                  onClick={() => handleBulkFullMarks(defaultFullMarks)}
+                  className="px-3 py-1.5 text-sm bg-gray-100 hover:bg-gray-200 rounded-md"
+                >
+                  Reset to {defaultFullMarks}
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Search */}
-          <div className="px-6 py-3 border-b border-gray-200">
+          <div className="px-6 py-3 border-b border-gray-200 bg-white">
             <div className="relative">
               <Icons.Search
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -442,18 +549,18 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
                 placeholder="Search by name or roll number..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
           </div>
 
-          {/* Students List */}
-          <div className="max-h-[400px] overflow-y-auto">
+          {/* Students Table */}
+          <div className="max-h-[450px] overflow-y-auto">
             {loading ? (
               <div className="flex justify-center py-12">
                 <Icons.Loader2
                   size={32}
-                  className="animate-spin text-purple-600"
+                  className="animate-spin text-blue-600"
                 />
               </div>
             ) : filteredStudents.length === 0 ? (
@@ -476,10 +583,19 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
                       Student Name
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      GPA (0-4.0)
+                      Obtained Marks
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Full Marks
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Percentage
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Grade
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      GPA
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -492,14 +608,14 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredStudents.map((student) => {
                     const studentMarks = marks[student.id] || {
-                      gpa: '',
+                      obtainedMarks: '',
+                      fullMarks: defaultFullMarks,
+                      percentage: '',
                       grade: '',
+                      gpa: '',
+                      isPass: false,
                       remarks: '',
                     };
-                    const status = getGPAStatus(studentMarks.gpa);
-                    const { grade, color } = studentMarks.gpa
-                      ? calculateGrade(studentMarks.gpa)
-                      : { grade: null, color: '' };
 
                     return (
                       <tr
@@ -517,52 +633,67 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
                         <td className="px-4 py-3">
                           <input
                             type="number"
-                            value={studentMarks.gpa}
+                            step="any"
+                            value={studentMarks.obtainedMarks}
                             onChange={(e) =>
-                              handleGPAChange(student.id, e.target.value)
+                              handleMarksChange(
+                                student.id,
+                                'obtainedMarks',
+                                e.target.value
+                              )
                             }
-                            className={`w-24 px-3 py-1.5 border rounded-md text-sm focus:outline-none focus:ring-2 ${
-                              status === 'pass'
-                                ? 'border-green-300 focus:ring-green-500 bg-green-50'
-                                : status === 'fail'
-                                ? 'border-red-300 focus:ring-red-500 bg-red-50'
-                                : 'border-gray-300 focus:ring-purple-500'
-                            }`}
+                            className="w-24 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             min="0"
-                            max="4.0"
-                            step="0.01"
-                            placeholder="0.00"
+                            placeholder="0"
                           />
                         </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="number"
+                            step="any"
+                            value={studentMarks.fullMarks}
+                            onChange={(e) =>
+                              handleMarksChange(
+                                student.id,
+                                'fullMarks',
+                                e.target.value
+                              )
+                            }
+                            className="w-24 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            min="1"
+                            placeholder="100"
+                          />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                          {studentMarks.percentage
+                            ? `${studentMarks.percentage}%`
+                            : '-'}
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          {grade && (
+                          {studentMarks.grade && (
                             <span
-                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
-                                color || getGradeColor(grade)
-                              }`}
+                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${studentMarks.gradeColor}`}
                             >
-                              {grade}
+                              {studentMarks.grade}
                             </span>
                           )}
                         </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
+                          {studentMarks.gpa ? studentMarks.gpa.toFixed(2) : '-'}
+                        </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          {status === 'pass' && (
-                            <span className="inline-flex items-center gap-1 text-green-600 text-sm">
-                              <Icons.CheckCircle size={14} />
-                              Pass
-                            </span>
-                          )}
-                          {status === 'fail' && (
-                            <span className="inline-flex items-center gap-1 text-red-600 text-sm">
-                              <Icons.XCircle size={14} />
-                              Fail
-                            </span>
-                          )}
-                          {status === 'pending' && (
-                            <span className="text-gray-400 text-sm">
-                              Pending
-                            </span>
-                          )}
+                          {studentMarks.percentage &&
+                            (studentMarks.isPass ? (
+                              <span className="inline-flex items-center gap-1 text-green-600 text-sm">
+                                <Icons.CheckCircle size={14} />
+                                Pass
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 text-red-600 text-sm">
+                                <Icons.XCircle size={14} />
+                                Fail
+                              </span>
+                            ))}
                         </td>
                         <td className="px-4 py-3">
                           <input
@@ -571,7 +702,7 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
                             onChange={(e) =>
                               handleRemarksChange(student.id, e.target.value)
                             }
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className="w-32 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             placeholder="Optional"
                           />
                         </td>
@@ -596,7 +727,7 @@ export default function ResultEntryModal({ isOpen, onClose, exam, onSuccess }) {
               type="button"
               onClick={handleSaveAll}
               disabled={saving || loading}
-              className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
             >
               {saving ? (
                 <>
