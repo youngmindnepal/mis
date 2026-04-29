@@ -117,7 +117,7 @@ model Batch {
   departmentId    Int?
   
   department      Department?      @relation(fields: [departmentId], references: [id])
-  
+  calendars        AcademicCalendar[]
   students        Student[]
   classrooms      Classroom[]
   exams           Exam[]
@@ -563,4 +563,58 @@ model ExamConfig {
   @@index([batchId])
   @@index([semester])
   @@index([examCategory])
+}
+
+model AcademicCalendar {
+  id            Int      @id @default(autoincrement())
+  date          DateTime
+  description   String
+  eventType     CalendarEventType
+  semester      Semester?
+  batchId       Int?
+  batch         Batch?   @relation(fields: [batchId], references: [id])
+  notices       CalendarNotice[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([date])
+  @@index([eventType])
+}
+
+enum CalendarEventType {
+  semester_start
+  semester_end
+  holiday
+  first_term_start
+  first_term_end
+  second_term_start
+  second_term_end
+  exam_preparation
+  exam_start
+  exam_end
+  result_publication
+  supplementary_exam
+  college_event
+  meeting
+  other
+}
+
+model CalendarNotice {
+  id          Int      @id @default(autoincrement())
+  calendarId  Int
+  calendar    AcademicCalendar @relation(fields: [calendarId], references: [id], onDelete: Cascade)
+  noticeType  NoticeType
+  title       String
+  content     String
+  generatedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+enum NoticeType {
+  holiday_notice
+  exam_notice
+  result_notice
+  class_start_notice
+  general_notice
 }

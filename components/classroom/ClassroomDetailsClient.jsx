@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as Icons from 'lucide-react';
+import AcademicCalendar3D from '@/components/classroom/AcademicCalendar3D';
 
 // Custom Modal Component
 const CustomModal = ({
@@ -44,13 +45,6 @@ const CustomModal = ({
     }
   };
 
-  const handleConfirm = async () => {
-    if (onConfirm) {
-      await onConfirm();
-    }
-    onClose();
-  };
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -82,7 +76,10 @@ const CustomModal = ({
                   </button>
                 )}
                 <button
-                  onClick={handleConfirm}
+                  onClick={async () => {
+                    if (onConfirm) await onConfirm();
+                    onClose();
+                  }}
                   className={`px-4 py-2 text-white rounded-lg transition-colors ${getButtonColor()}`}
                 >
                   {type === 'confirm' ? 'Confirm' : 'OK'}
@@ -104,7 +101,13 @@ export default function ClassroomDetailsClient({
   const router = useRouter();
   const [activeTab, setActiveTab] = useState('students');
   const [showAttendanceModal, setShowAttendanceModal] = useState(false);
+  const [showAcademicCalendar, setShowAcademicCalendar] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Attendance form
   const [attendanceForm, setAttendanceForm] = useState({
     date: new Date().toISOString().split('T')[0],
     startTime: '',
@@ -112,18 +115,11 @@ export default function ClassroomDetailsClient({
     syllabusCovered: '',
   });
   const [studentAttendance, setStudentAttendance] = useState([]);
-  const [modal, setModal] = useState({
-    isOpen: false,
-    type: 'confirm',
-    title: '',
-    message: '',
-    onConfirm: null,
-  });
-  const [successMessage, setSuccessMessage] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingDate, setEditingDate] = useState('');
+  const [editingSessionId, setEditingSessionId] = useState(null);
 
-  // Date range filter states
+  // Date range filter
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [filteredAttendanceData, setFilteredAttendanceData] = useState({
@@ -133,135 +129,44 @@ export default function ClassroomDetailsClient({
   });
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
 
-  // Edit session states
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingDate, setEditingDate] = useState('');
-  const [editingSessionId, setEditingSessionId] = useState(null);
-
-  // Overall statistics
-  const [overallStats, setOverallStats] = useState({
-    totalStudents: 0,
-    totalSessions: 0,
-    overallAttendance: 0,
-    highestAttendance: { name: '', percentage: 0 },
-    lowestAttendance: { name: '', percentage: 100 },
+  // Modal state
+  const [modal, setModal] = useState({
+    isOpen: false,
+    type: 'confirm',
+    title: '',
+    message: '',
+    onConfirm: null,
   });
-
-  // Get active students and sort by name alphabetically
-  const getActiveStudentsSorted = () => {
-    const active =
-      classroom.enrolledStudents?.filter(
-        (student) => student.enrollmentStatus === 'active'
-      ) || [];
-
-    // Sort by name in ascending order
-    return [...active].sort((a, b) => {
-      const nameA = (a.name || '').toLowerCase();
-      const nameB = (b.name || '').toLowerCase();
-      return nameA.localeCompare(nameB);
-    });
-  };
-
-  // Helper function for attendance - returns sorted active students
-  const getActiveStudentsForAttendance = () => {
-    return getActiveStudentsSorted();
-  };
-
-  // Filter only active students (sorted by name)
-  const activeStudents = getActiveStudentsSorted();
-  const activeStudentIds = new Set(activeStudents.map((s) => s.id));
 
   // Auto-dismiss messages
   useEffect(() => {
     if (successMessage) {
-      const timer = setTimeout(() => setSuccessMessage(null), 3000);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => setSuccessMessage(null), 3000);
+      return () => clearTimeout(t);
     }
   }, [successMessage]);
-
   useEffect(() => {
     if (errorMessage) {
-      const timer = setTimeout(() => setErrorMessage(null), 3000);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => setErrorMessage(null), 3000);
+      return () => clearTimeout(t);
     }
   }, [errorMessage]);
 
-  // Export attendance report to CSV
-  const exportAttendanceReport = () => {
-    if (
-      !filteredAttendanceData.students.length ||
-      !filteredAttendanceData.sessionDates.length
-    ) {
-      setErrorMessage('No data to export');
-      return;
-    }
-
-    const headers = [
-      'Student Name',
-      'Roll No',
-      ...filteredAttendanceData.sessionDates,
-      'Present Count',
-      'Total Sessions',
-      'Percentage (%)',
-    ];
-
-    // Sort students in the report by name
-    const sortedStudents = [...filteredAttendanceData.students].sort((a, b) => {
-      const nameA = (a.studentName || '').toLowerCase();
-      const nameB = (b.studentName || '').toLowerCase();
-      return nameA.localeCompare(nameB);
-    });
-
-    const rows = sortedStudents.map((student) => {
-      let presentCount = 0;
-      const sessionStatuses = filteredAttendanceData.sessionDates.map(
-        (date) => {
-          const status = student.attendances[date];
-          if (status === 'present') {
-            presentCount++;
-            return 'P';
-          }
-          return 'A';
-        }
-      );
-
-      return [
-        student.studentName,
-        student.rollNumber || '-',
-        ...sessionStatuses,
-        presentCount,
-        student.totalSessions,
-        student.percentage.toFixed(2),
-      ];
-    });
-
-    const csvContent = [headers, ...rows]
-      .map((row) => row.join(','))
-      .join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute(
-      'download',
-      `attendance_report_${
-        classroom.name
-      }_${new Date().toLocaleDateString()}.csv`
+  // Get active students sorted by name
+  const getActiveStudentsSorted = () => {
+    const active =
+      classroom.enrolledStudents?.filter(
+        (s) => s.enrollmentStatus === 'active'
+      ) || [];
+    return [...active].sort((a, b) =>
+      (a.name || '').toLowerCase().localeCompare((b.name || '').toLowerCase())
     );
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    setSuccessMessage('Attendance report exported successfully!');
   };
 
-  // Fetch filtered attendance data when date range changes
-  useEffect(() => {
-    if (activeTab === 'attendance') {
-      fetchFilteredAttendance();
-    }
-  }, [fromDate, toDate, activeTab]);
+  const activeStudents = getActiveStudentsSorted();
+  const activeStudentIds = new Set(activeStudents.map((s) => s.id));
 
+  // Fetch attendance data
   const fetchFilteredAttendance = async () => {
     setIsLoadingAttendance(true);
     try {
@@ -276,10 +181,9 @@ export default function ClassroomDetailsClient({
 
       const data = await response.json();
       const attendanceByStudent = {};
-      let totalPresentCount = 0;
-      let totalPossibleAttendance = 0;
+      let totalPresent = 0,
+        totalPossible = 0;
 
-      // Filter to only include active enrolled students
       const filteredAttendances = data.attendances.filter((att) =>
         activeStudentIds.has(att.studentId)
       );
@@ -303,9 +207,9 @@ export default function ClassroomDetailsClient({
         attendanceByStudent[att.studentId].totalSessions++;
         if (att.status === 'present') {
           attendanceByStudent[att.studentId].presentCount++;
-          totalPresentCount++;
+          totalPresent++;
         }
-        totalPossibleAttendance++;
+        totalPossible++;
       });
 
       const sessionDates = [
@@ -315,7 +219,6 @@ export default function ClassroomDetailsClient({
           )
         ),
       ].sort((a, b) => new Date(a) - new Date(b));
-
       const sessionIsoDates = [
         ...new Set(
           filteredAttendances.map(
@@ -325,17 +228,13 @@ export default function ClassroomDetailsClient({
         ),
       ].sort();
 
-      const studentsWithStats = Object.values(attendanceByStudent).map(
-        (student) => ({
-          ...student,
-          percentage:
-            student.totalSessions > 0
-              ? (student.presentCount / student.totalSessions) * 100
-              : 0,
-        })
-      );
+      const studentsWithStats = Object.values(attendanceByStudent).map((s) => ({
+        ...s,
+        percentage:
+          s.totalSessions > 0 ? (s.presentCount / s.totalSessions) * 100 : 0,
+      }));
 
-      // Add active students with no attendance records
+      // Add active students with no attendance
       activeStudents.forEach((student) => {
         if (!attendanceByStudent[student.id]) {
           studentsWithStats.push({
@@ -350,110 +249,79 @@ export default function ClassroomDetailsClient({
         }
       });
 
-      // Sort students by name for display
-      studentsWithStats.sort((a, b) => {
-        const nameA = (a.studentName || '').toLowerCase();
-        const nameB = (b.studentName || '').toLowerCase();
-        return nameA.localeCompare(nameB);
-      });
-
-      let highest = { name: '', percentage: 0 };
-      let lowest = { name: '', percentage: 100 };
-
-      studentsWithStats.forEach((student) => {
-        if (student.percentage > highest.percentage) {
-          highest = {
-            name: student.studentName,
-            percentage: student.percentage,
-          };
-        }
-        if (
-          student.percentage < lowest.percentage &&
-          student.totalSessions > 0
-        ) {
-          lowest = {
-            name: student.studentName,
-            percentage: student.percentage,
-          };
-        }
-      });
-
-      const overallAttendance =
-        totalPossibleAttendance > 0
-          ? (totalPresentCount / totalPossibleAttendance) * 100
-          : 0;
-
-      setOverallStats({
-        totalStudents: studentsWithStats.length,
-        totalSessions: sessionDates.length,
-        overallAttendance,
-        highestAttendance: highest,
-        lowestAttendance: lowest,
-      });
+      studentsWithStats.sort((a, b) =>
+        (a.studentName || '')
+          .toLowerCase()
+          .localeCompare((b.studentName || '').toLowerCase())
+      );
 
       setFilteredAttendanceData({
         students: studentsWithStats,
-        sessionDates: sessionDates,
-        sessionIsoDates: sessionIsoDates,
-        totalStudents: studentsWithStats.length,
-        totalSessions: sessionDates.length,
+        sessionDates,
+        sessionIsoDates,
       });
     } catch (err) {
-      console.error('Error fetching filtered attendance:', err);
       setErrorMessage(err.message);
     } finally {
       setIsLoadingAttendance(false);
     }
   };
+
+  useEffect(() => {
+    if (activeTab === 'attendance') fetchFilteredAttendance();
+  }, [fromDate, toDate, activeTab]);
+
+  // Attendance CRUD
+  const initializeAttendanceList = () => {
+    const list = getActiveStudentsSorted().map((s) => ({
+      studentId: s.id,
+      studentName: s.name,
+      rollNumber: s.rollNumber,
+      status: 'present',
+      remarks: '',
+    }));
+    list.sort((a, b) =>
+      (a.studentName || '')
+        .toLowerCase()
+        .localeCompare((b.studentName || '').toLowerCase())
+    );
+    setStudentAttendance(list);
+  };
+
   const fetchAttendanceForEditing = async (isoDate) => {
     setIsLoadingAttendance(true);
     try {
-      // This URL is correct - it uses /by-date
       const response = await fetch(
         `/api/classrooms/${classroom.id}/attendance/by-date?date=${isoDate}`
       );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch attendance data');
-      }
-
+      if (!response.ok) throw new Error('Failed to fetch attendance');
       const data = await response.json();
-
-      // Filter to only include active enrolled students
-      const activeStudentsList = getActiveStudentsForAttendance();
-      const activeStudentIdsSet = new Set(activeStudentsList.map((s) => s.id));
-
-      const filteredAttendances = data.attendances.filter((att) =>
-        activeStudentIdsSet.has(att.studentId)
+      const activeIds = new Set(getActiveStudentsSorted().map((s) => s.id));
+      const filtered = data.attendances.filter((att) =>
+        activeIds.has(att.studentId)
       );
 
-      if (data.session && data.session.id) {
+      if (data.session?.id) {
         setEditingSessionId(data.session.id);
         setIsEditMode(true);
         setEditingDate(new Date(isoDate).toLocaleDateString());
-
-        const attendanceList = filteredAttendances.map((att) => ({
+        const list = filtered.map((att) => ({
           studentId: att.studentId,
           studentName: att.studentName,
           rollNumber: att.rollNumber,
           status: att.status,
           remarks: att.remarks,
         }));
-
-        // Sort attendance list by student name
-        attendanceList.sort((a, b) => {
-          const nameA = (a.studentName || '').toLowerCase();
-          const nameB = (b.studentName || '').toLowerCase();
-          return nameA.localeCompare(nameB);
-        });
-
-        setStudentAttendance(attendanceList);
+        list.sort((a, b) =>
+          (a.studentName || '')
+            .toLowerCase()
+            .localeCompare((b.studentName || '').toLowerCase())
+        );
+        setStudentAttendance(list);
       } else {
         initializeAttendanceList();
-        setEditingSessionId(null);
         setIsEditMode(false);
-        setEditingDate(new Date(isoDate).toLocaleDateString());
+        setEditingSessionId(null);
       }
 
       setAttendanceForm({
@@ -474,124 +342,69 @@ export default function ClassroomDetailsClient({
           : '',
         syllabusCovered: data.session?.syllabusCovered || '',
       });
-
       setShowAttendanceModal(true);
     } catch (err) {
-      console.error('Error fetching attendance for editing:', err);
-      setErrorMessage(
-        err.message || 'Failed to load attendance data for editing'
-      );
+      setErrorMessage(err.message);
     } finally {
       setIsLoadingAttendance(false);
     }
   };
 
-  // Add this function to check for existing attendance on the selected date
-  const checkExistingAttendance = async (date) => {
-    try {
-      const response = await fetch(
-        `/api/classrooms/${classroom.id}/attendance/by-date?date=${date}`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        if (data.session && data.session.id) {
-          return {
-            exists: true,
-            sessionId: data.session.id,
-            session: data.session,
-          };
-        }
-      }
-      return { exists: false };
-    } catch (error) {
-      console.error('Error checking existing attendance:', error);
-      return { exists: false };
-    }
-  };
-
-  // Update the saveUpdatedAttendance function to check before saving
-  const saveUpdatedAttendance = async () => {
+  const saveAttendance = async () => {
     if (!attendanceForm.date) {
       setErrorMessage('Please select a date');
       return;
     }
-
-    // If not in edit mode, check if attendance already exists for this date
-    if (!isEditMode && !editingSessionId) {
-      const existing = await checkExistingAttendance(attendanceForm.date);
-      if (existing.exists) {
-        showModal(
-          'warning',
-          'Attendance Already Exists',
-          `Attendance has already been marked for ${attendanceForm.date}.\n\nWould you like to edit the existing session?`,
-          async () => {
-            setShowAttendanceModal(false);
-            await fetchAttendanceForEditing(attendanceForm.date);
-          }
-        );
-        return;
-      }
-    }
-
     setSubmitting(true);
     try {
       const formattedDate = new Date(attendanceForm.date)
         .toISOString()
         .split('T')[0];
+      const url =
+        isEditMode && editingSessionId
+          ? `/api/classrooms/${classroom.id}/attendance/session/${editingSessionId}`
+          : `/api/classrooms/${classroom.id}/attendance`;
+      const method = isEditMode && editingSessionId ? 'PUT' : 'POST';
 
-      let url = `/api/classrooms/${classroom.id}/attendance`;
-      let method = 'POST';
-      let requestBody = {};
-
-      if (isEditMode && editingSessionId) {
-        url = `/api/classrooms/${classroom.id}/attendance/session/${editingSessionId}`;
-        method = 'PUT';
-        requestBody = {
-          sessionDetails: {
-            date: formattedDate,
-            startTime: attendanceForm.startTime,
-            endTime: attendanceForm.endTime,
-            syllabusCovered: attendanceForm.syllabusCovered,
-          },
-          attendances: studentAttendance.map((s) => ({
-            studentId: s.studentId,
-            status: s.status,
-            remarks: s.remarks,
-          })),
-        };
-      } else {
-        requestBody = {
-          date: formattedDate,
-          startTime: attendanceForm.startTime,
-          endTime: attendanceForm.endTime,
-          syllabusCovered: attendanceForm.syllabusCovered,
-          attendances: studentAttendance.map((s) => ({
-            studentId: s.studentId,
-            status: s.status,
-            remarks: s.remarks,
-          })),
-        };
-      }
+      const body =
+        isEditMode && editingSessionId
+          ? {
+              sessionDetails: {
+                date: formattedDate,
+                startTime: attendanceForm.startTime,
+                endTime: attendanceForm.endTime,
+                syllabusCovered: attendanceForm.syllabusCovered,
+              },
+              attendances: studentAttendance.map((s) => ({
+                studentId: s.studentId,
+                status: s.status,
+                remarks: s.remarks,
+              })),
+            }
+          : {
+              date: formattedDate,
+              startTime: attendanceForm.startTime,
+              endTime: attendanceForm.endTime,
+              syllabusCovered: attendanceForm.syllabusCovered,
+              attendances: studentAttendance.map((s) => ({
+                studentId: s.studentId,
+                status: s.status,
+                remarks: s.remarks,
+              })),
+            };
 
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify(body),
       });
-
-      const responseData = await response.json();
-
       if (!response.ok) {
-        throw new Error(
-          responseData.error ||
-            `Failed to ${editingSessionId ? 'update' : 'mark'} attendance`
-        );
+        const err = await response.json();
+        throw new Error(err.error);
       }
 
       setSuccessMessage(
-        `Attendance ${
-          editingSessionId ? 'updated' : 'marked'
-        } successfully for ${attendanceForm.date}!`
+        `Attendance ${editingSessionId ? 'updated' : 'marked'} successfully!`
       );
       setShowAttendanceModal(false);
       resetAttendanceForm();
@@ -603,50 +416,23 @@ export default function ClassroomDetailsClient({
       setSubmitting(false);
     }
   };
+
   const deleteAttendanceSession = async (sessionId, displayDate) => {
     try {
-      // Use the correct URL structure with "session" in the path
       const response = await fetch(
         `/api/classrooms/${classroom.id}/attendance/session/${sessionId}`,
         { method: 'DELETE' }
       );
-
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || 'Failed to delete attendance session'
-        );
+        const err = await response.json();
+        throw new Error(err.error);
       }
-
-      setSuccessMessage(
-        `Attendance session for ${displayDate} deleted successfully!`
-      );
+      setSuccessMessage(`Attendance session for ${displayDate} deleted!`);
       refreshPage();
       setTimeout(() => fetchFilteredAttendance(), 500);
     } catch (err) {
       setErrorMessage(err.message);
     }
-  };
-
-  // Update initializeAttendanceList with sorted students
-  const initializeAttendanceList = () => {
-    const activeOnly = getActiveStudentsForAttendance();
-    const attendanceList = activeOnly.map((student) => ({
-      studentId: student.id,
-      studentName: student.name,
-      rollNumber: student.rollNumber,
-      status: 'present',
-      remarks: '',
-    }));
-
-    // Sort by student name
-    attendanceList.sort((a, b) => {
-      const nameA = (a.studentName || '').toLowerCase();
-      const nameB = (b.studentName || '').toLowerCase();
-      return nameA.localeCompare(nameB);
-    });
-
-    setStudentAttendance(attendanceList);
   };
 
   const resetAttendanceForm = () => {
@@ -664,45 +450,84 @@ export default function ClassroomDetailsClient({
 
   const toggleAttendance = (studentId) => {
     setStudentAttendance((prev) =>
-      prev.map((student) =>
-        student.studentId === studentId
-          ? {
-              ...student,
-              status: student.status === 'present' ? 'absent' : 'present',
-            }
-          : student
+      prev.map((s) =>
+        s.studentId === studentId
+          ? { ...s, status: s.status === 'present' ? 'absent' : 'present' }
+          : s
       )
     );
   };
 
-  const toggleAllAttendance = (status) => {
-    setStudentAttendance((prev) =>
-      prev.map((student) => ({ ...student, status }))
-    );
-  };
-
+  const toggleAllAttendance = (status) =>
+    setStudentAttendance((prev) => prev.map((s) => ({ ...s, status })));
   const markAllPresent = () => toggleAllAttendance('present');
   const markAllAbsent = () => toggleAllAttendance('absent');
-
-  const updateRemarks = (studentId, remarks) => {
+  const updateRemarks = (studentId, remarks) =>
     setStudentAttendance((prev) =>
-      prev.map((student) =>
-        student.studentId === studentId ? { ...student, remarks } : student
-      )
+      prev.map((s) => (s.studentId === studentId ? { ...s, remarks } : s))
     );
+
+  // Export CSV
+  const exportAttendanceReport = () => {
+    if (
+      !filteredAttendanceData.students.length ||
+      !filteredAttendanceData.sessionDates.length
+    ) {
+      setErrorMessage('No data to export');
+      return;
+    }
+    const headers = [
+      'Student Name',
+      'Roll No',
+      ...filteredAttendanceData.sessionDates,
+      'Present Count',
+      'Total Sessions',
+      'Percentage (%)',
+    ];
+    const sorted = [...filteredAttendanceData.students].sort((a, b) =>
+      (a.studentName || '')
+        .toLowerCase()
+        .localeCompare((b.studentName || '').toLowerCase())
+    );
+    const rows = sorted.map((student) => {
+      let presentCount = 0;
+      const statuses = filteredAttendanceData.sessionDates.map((date) => {
+        if (student.attendances[date] === 'present') {
+          presentCount++;
+          return 'P';
+        }
+        return 'A';
+      });
+      return [
+        student.studentName,
+        student.rollNumber || '-',
+        ...statuses,
+        presentCount,
+        student.totalSessions,
+        student.percentage.toFixed(2),
+      ];
+    });
+    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `attendance_${
+      classroom.name
+    }_${new Date().toLocaleDateString()}.csv`;
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setSuccessMessage('Report exported!');
   };
 
-  const showModal = (type, title, message, onConfirm = null) => {
+  const showModal = (type, title, message, onConfirm) => {
     setModal({
       isOpen: true,
       type,
       title,
       message,
       onConfirm: async () => {
-        if (onConfirm) {
-          await onConfirm();
-        }
-        setModal({ ...modal, isOpen: false });
+        if (onConfirm) await onConfirm();
+        setModal((prev) => ({ ...prev, isOpen: false }));
       },
     });
   };
@@ -713,37 +538,12 @@ export default function ClassroomDetailsClient({
     setTimeout(() => setIsRefreshing(false), 1000);
   };
 
-  const openTakeAttendanceModal = () => {
-    resetAttendanceForm();
-    initializeAttendanceList();
-    setShowAttendanceModal(true);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString();
-  };
-
-  const getStatusBadge = (percentage) => {
-    if (percentage >= 75)
-      return { bg: 'bg-green-100 text-green-800', text: 'Good' };
-    if (percentage >= 60)
-      return { bg: 'bg-yellow-100 text-yellow-800', text: 'Average' };
-    if (percentage >= 40)
-      return { bg: 'bg-orange-100 text-orange-800', text: 'Poor' };
-    return { bg: 'bg-red-100 text-red-800', text: 'Critical' };
-  };
-
-  const today = new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
-  const clearDateFilters = () => {
-    setFromDate('');
-    setToDate('');
+  const formatDate = (d) => (d ? new Date(d).toLocaleDateString() : '-');
+  const getStatusBadge = (p) => {
+    if (p >= 75) return 'bg-green-100 text-green-800';
+    if (p >= 60) return 'bg-yellow-100 text-yellow-800';
+    if (p >= 40) return 'bg-orange-100 text-orange-800';
+    return 'bg-red-100 text-red-800';
   };
 
   return (
@@ -753,12 +553,12 @@ export default function ClassroomDetailsClient({
         <div className="fixed inset-0 bg-black/20 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-4 flex items-center gap-3 shadow-lg">
             <Icons.Loader2 size={24} className="animate-spin text-indigo-600" />
-            <span className="text-gray-700">Refreshing data...</span>
+            <span className="text-gray-700">Refreshing...</span>
           </div>
         </div>
       )}
 
-      {/* Success Toast */}
+      {/* Toast Messages */}
       <AnimatePresence>
         {successMessage && (
           <motion.div
@@ -780,8 +580,6 @@ export default function ClassroomDetailsClient({
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Error Toast */}
       <AnimatePresence>
         {errorMessage && (
           <motion.div
@@ -804,119 +602,95 @@ export default function ClassroomDetailsClient({
       {/* Back Button */}
       <Link
         href="/dashboard/classroom"
-        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors bg-white px-4 py-2 rounded-lg shadow-sm"
+        className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-800 bg-white px-4 py-2 rounded-lg shadow-sm"
       >
-        <Icons.ArrowLeft size={20} />
-        Back to Classrooms
+        <Icons.ArrowLeft size={20} /> Back to Classrooms
       </Link>
 
-      {/* Course Information Card */}
+      {/* Course Info Card */}
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-8">
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-6">
           <div className="flex justify-between items-start flex-wrap gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-white mb-2">
+              <h1 className="text-3xl font-bold text-white">
                 {classroom.name}
               </h1>
               <p className="text-indigo-100 text-lg">
-                {classroom.course?.name || 'No Course Assigned'}
+                {classroom.course?.name || 'No Course'}
               </p>
               {classroom.course?.code && (
-                <p className="text-indigo-200 text-sm mt-1">
-                  Course Code: {classroom.course.code}
+                <p className="text-indigo-200 text-sm">
+                  Code: {classroom.course.code}
                 </p>
               )}
             </div>
-            {isTeacher && (
-              <button
-                onClick={openTakeAttendanceModal}
-                className="px-5 py-2.5 bg-white text-indigo-600 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2 font-medium shadow-md"
-              >
-                <Icons.CheckSquare size={18} /> Take Attendance
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Course Details */}
-        <div className="p-6 border-b">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <p className="text-xs text-gray-500">Course Name</p>
-              <p className="font-semibold">{classroom.course?.name || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Course Code</p>
-              <p className="font-semibold">{classroom.course?.code || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Credits</p>
-              <p className="font-semibold">
-                {classroom.course?.credits || 'N/A'}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Course Type</p>
-              <p className="font-semibold">
-                {classroom.course?.courseType === 'core'
-                  ? 'Core Course'
-                  : 'Elective Course'}
-              </p>
+            <div className="flex gap-3">
+              {isTeacher && (
+                <>
+                  <button
+                    onClick={() => {
+                      resetAttendanceForm();
+                      initializeAttendanceList();
+                      setShowAttendanceModal(true);
+                    }}
+                    className="px-4 py-2 bg-white text-indigo-600 rounded-lg hover:bg-gray-100 font-medium flex items-center gap-2 shadow-md"
+                  >
+                    <Icons.CheckSquare size={18} /> Take Attendance
+                  </button>
+                  <button
+                    onClick={() => setShowAcademicCalendar(true)}
+                    className="px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 font-medium flex items-center gap-2"
+                  >
+                    <Icons.CalendarDays size={18} /> Calendar
+                  </button>
+                </>
+              )}
             </div>
           </div>
-          {classroom.course?.description && (
-            <p className="text-sm text-gray-600 mt-4">
-              {classroom.course.description}
-            </p>
-          )}
         </div>
 
         {/* Stats Grid */}
-        <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center">
-              <Icons.User size={22} className="text-indigo-600" />
+        <div className="p-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            {
+              icon: Icons.User,
+              color: 'bg-indigo-100 text-indigo-600',
+              label: 'Faculty',
+              value: classroom.faculty?.name || 'Not assigned',
+            },
+            {
+              icon: Icons.GraduationCap,
+              color: 'bg-green-100 text-green-600',
+              label: 'Batch',
+              value: classroom.batch?.name || 'Not assigned',
+            },
+            {
+              icon: Icons.Users,
+              color: 'bg-blue-100 text-blue-600',
+              label: 'Enrolled',
+              value: `${classroom._count?.enrollments || 0} Students`,
+            },
+            {
+              icon: Icons.Calendar,
+              color: 'bg-purple-100 text-purple-600',
+              label: 'Sessions',
+              value: `${classroom._count?.sessions || 0} Held`,
+            },
+          ].map((stat, i) => (
+            <div key={i} className="flex items-center gap-3">
+              <div
+                className={`w-12 h-12 ${
+                  stat.color.split(' ')[0]
+                } rounded-xl flex items-center justify-center`}
+              >
+                <stat.icon size={22} className={stat.color.split(' ')[1]} />
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">{stat.label}</p>
+                <p className="font-semibold">{stat.value}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-xs text-gray-500">Faculty</p>
-              <p className="font-semibold">
-                {classroom.faculty?.name || 'Not assigned'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <Icons.GraduationCap size={22} className="text-green-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Batch</p>
-              <p className="font-semibold">
-                {classroom.batch?.name || 'Not assigned'}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-              <Icons.Users size={22} className="text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Enrolled</p>
-              <p className="font-semibold">
-                {classroom._count?.enrollments || 0} Students
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Icons.Calendar size={22} className="text-purple-600" />
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Sessions</p>
-              <p className="font-semibold">
-                {classroom._count?.sessions || 0} Held
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
 
@@ -924,28 +698,37 @@ export default function ClassroomDetailsClient({
       <div className="bg-white rounded-xl shadow-sm overflow-hidden">
         <div className="border-b px-6">
           <div className="flex gap-8">
-            <button
-              onClick={() => setActiveTab('students')}
-              className={`py-4 text-sm font-medium transition-colors border-b-2 ${
-                activeTab === 'students'
-                  ? 'text-indigo-600 border-indigo-600'
-                  : 'text-gray-500 border-transparent hover:text-gray-700'
-              }`}
-            >
-              <Icons.Users size={16} className="inline mr-2" /> Students (
-              {activeStudents.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('attendance')}
-              className={`py-4 text-sm font-medium transition-colors border-b-2 ${
-                activeTab === 'attendance'
-                  ? 'text-indigo-600 border-indigo-600'
-                  : 'text-gray-500 border-transparent hover:text-gray-700'
-              }`}
-            >
-              <Icons.Clipboard size={16} className="inline mr-2" /> Attendance
-              Report
-            </button>
+            {[
+              {
+                id: 'students',
+                icon: Icons.Users,
+                label: 'Students',
+                count: activeStudents.length,
+              },
+              {
+                id: 'attendance',
+                icon: Icons.Clipboard,
+                label: 'Attendance Report',
+              },
+              {
+                id: 'calendar',
+                icon: Icons.CalendarDays,
+                label: 'Academic Calendar',
+              },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-4 text-sm font-medium transition-colors border-b-2 flex items-center gap-2 ${
+                  activeTab === tab.id
+                    ? 'text-indigo-600 border-indigo-600'
+                    : 'text-gray-500 border-transparent hover:text-gray-700'
+                }`}
+              >
+                <tab.icon size={16} /> {tab.label}{' '}
+                {tab.count !== undefined && `(${tab.count})`}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -953,49 +736,36 @@ export default function ClassroomDetailsClient({
           {/* Students Tab */}
           {activeTab === 'students' && (
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                Active Students
-              </h3>
               {activeStudents.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="w-full">
-                    <thead className="bg-gray-50 rounded-lg">
+                    <thead className="bg-gray-50">
                       <tr>
-                        <th className="text-left py-3 px-4 text-sm font-semibold">
-                          Roll No
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold">
-                          Student Name
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold">
-                          Email
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold">
-                          Enrolled Date
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold">
-                          Status
-                        </th>
+                        {['Roll No', 'Name', 'Email', 'Enrolled', 'Status'].map(
+                          (h) => (
+                            <th
+                              key={h}
+                              className="text-left py-3 px-4 text-sm font-semibold"
+                            >
+                              {h}
+                            </th>
+                          )
+                        )}
                       </tr>
                     </thead>
                     <tbody>
-                      {activeStudents.map((student) => (
-                        <tr
-                          key={student.id}
-                          className="border-b hover:bg-gray-50"
-                        >
+                      {activeStudents.map((s) => (
+                        <tr key={s.id} className="border-b hover:bg-gray-50">
                           <td className="py-3 px-4 text-sm font-mono">
-                            {student.rollNumber || '-'}
+                            {s.rollNumber || '-'}
                           </td>
-                          <td className="py-3 px-4">
-                            <p className="font-medium">{student.name}</p>
-                          </td>
-                          <td className="py-3 px-4 text-sm">{student.email}</td>
+                          <td className="py-3 px-4 font-medium">{s.name}</td>
+                          <td className="py-3 px-4 text-sm">{s.email}</td>
                           <td className="py-3 px-4 text-sm">
-                            {formatDate(student.enrolledAt)}
+                            {formatDate(s.enrolledAt)}
                           </td>
                           <td className="py-3 px-4">
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
                               Active
                             </span>
                           </td>
@@ -1010,150 +780,138 @@ export default function ClassroomDetailsClient({
                     size={48}
                     className="text-gray-300 mx-auto mb-3"
                   />
-                  <p className="text-gray-500">
-                    No active students enrolled in this classroom.
-                  </p>
+                  <p className="text-gray-500">No active students enrolled.</p>
                 </div>
               )}
             </div>
           )}
 
-          {/* Attendance Tab - Keep existing JSX */}
+          {/* Attendance Tab */}
           {activeTab === 'attendance' && (
             <div>
-              {/* Keep existing attendance tab JSX */}
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold text-gray-800">
-                  Attendance Report
-                </h3>
+                <h3 className="text-lg font-semibold">Attendance Report</h3>
                 <button
                   onClick={exportAttendanceReport}
                   disabled={!filteredAttendanceData.students.length}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
                 >
-                  <Icons.Download size={18} /> Export Report
+                  <Icons.Download size={18} /> Export
                 </button>
               </div>
 
-              {/* Overall Statistics Cards */}
-              {!isLoadingAttendance &&
-                filteredAttendanceData.sessionDates?.length > 0 && (
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-                    {/* Stats cards - keep existing */}
-                  </div>
-                )}
-
-              {/* Date Range Filter */}
+              {/* Date Filter */}
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <div className="flex flex-wrap gap-4 items-end">
                   <div className="flex-1 min-w-[150px]">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      From Date
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      From
                     </label>
                     <input
                       type="date"
                       value={fromDate}
                       onChange={(e) => setFromDate(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg"
                     />
                   </div>
                   <div className="flex-1 min-w-[150px]">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      To Date
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      To
                     </label>
                     <input
                       type="date"
                       value={toDate}
                       onChange={(e) => setToDate(e.target.value)}
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                      className="w-full px-3 py-2 border rounded-lg"
                     />
                   </div>
                   <button
-                    onClick={clearDateFilters}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors flex items-center gap-2"
+                    onClick={() => {
+                      setFromDate('');
+                      setToDate('');
+                    }}
+                    className="px-4 py-2 text-gray-600 border rounded-lg hover:bg-gray-100"
                   >
-                    <Icons.X size={16} /> Clear Filters
+                    <Icons.X size={16} /> Clear
                   </button>
                 </div>
               </div>
 
-              {/* Loading State */}
+              {/* Loading */}
               {isLoadingAttendance && (
                 <div className="text-center py-12">
                   <Icons.Loader2
                     size={48}
                     className="animate-spin text-indigo-600 mx-auto mb-4"
                   />
-                  <p className="text-gray-500">Loading attendance data...</p>
+                  <p>Loading...</p>
                 </div>
               )}
 
-              {/* Attendance Matrix Table */}
+              {/* Attendance Table */}
               {!isLoadingAttendance &&
-                filteredAttendanceData.sessionDates?.length > 0 && (
+                filteredAttendanceData.sessionDates.length > 0 && (
                   <div className="overflow-x-auto">
                     <table className="w-full border-collapse">
                       <thead className="bg-gray-50 sticky top-0">
                         <tr>
-                          <th className="sticky left-0 bg-gray-50 text-left py-3 px-4 text-sm font-semibold border-b z-10 min-w-[120px]">
-                            Student Name
+                          <th className="sticky left-0 bg-gray-50 text-left py-3 px-4 text-sm font-semibold border-b z-10">
+                            Student
                           </th>
-                          <th className="sticky left-32 bg-gray-50 text-left py-3 px-4 text-sm font-semibold border-b z-10 min-w-[100px]">
+                          <th className="sticky left-32 bg-gray-50 text-left py-3 px-4 text-sm font-semibold border-b z-10">
                             Roll No
                           </th>
                           {filteredAttendanceData.sessionDates.map(
-                            (date, index) => (
+                            (date, i) => (
                               <th
                                 key={date}
-                                className="text-center py-3 px-2 text-xs font-semibold border-b min-w-[120px] group relative"
-                                title={date}
+                                className="text-center py-3 px-2 text-xs font-semibold border-b min-w-[100px] group relative"
                               >
-                                <div>{date}</div>
+                                <div>
+                                  {new Date(
+                                    filteredAttendanceData.sessionIsoDates[i]
+                                  ).getDate()}
+                                  /
+                                  {new Date(
+                                    filteredAttendanceData.sessionIsoDates[i]
+                                  ).getMonth() + 1}
+                                </div>
                                 {isTeacher && (
                                   <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
                                     <button
                                       onClick={() =>
                                         fetchAttendanceForEditing(
                                           filteredAttendanceData
-                                            .sessionIsoDates[index]
+                                            .sessionIsoDates[i]
                                         )
                                       }
                                       className="p-1 hover:bg-gray-200 rounded"
-                                      title="Edit attendance for this date"
+                                      title="Edit"
                                     >
                                       <Icons.Edit2 size={12} />
                                     </button>
                                     <button
                                       onClick={async () => {
-                                        const isoDate =
-                                          filteredAttendanceData
-                                            .sessionIsoDates[index];
-                                        const response = await fetch(
-                                          `/api/classrooms/${classroom.id}/attendance/by-date?date=${isoDate}`
+                                        const r = await fetch(
+                                          `/api/classrooms/${classroom.id}/attendance/by-date?date=${filteredAttendanceData.sessionIsoDates[i]}`
                                         );
-                                        if (response.ok) {
-                                          const data = await response.json();
-                                          if (data.session?.id) {
+                                        if (r.ok) {
+                                          const d = await r.json();
+                                          if (d.session?.id)
                                             showModal(
                                               'warning',
-                                              'Delete Attendance Session',
-                                              `Are you sure you want to delete the attendance session for ${date}? This action cannot be undone.`,
-                                              async () => {
-                                                await deleteAttendanceSession(
-                                                  data.session.id,
+                                              'Delete Session',
+                                              `Delete attendance for ${date}?`,
+                                              () =>
+                                                deleteAttendanceSession(
+                                                  d.session.id,
                                                   date
-                                                );
-                                              }
+                                                )
                                             );
-                                          } else {
-                                            setErrorMessage(
-                                              `No attendance session found for ${date}`
-                                            );
-                                          }
                                         }
                                       }}
                                       className="p-1 hover:bg-gray-200 rounded text-red-600"
-                                      title="Delete session"
+                                      title="Delete"
                                     >
                                       <Icons.Trash2 size={12} />
                                     </button>
@@ -1162,10 +920,10 @@ export default function ClassroomDetailsClient({
                               </th>
                             )
                           )}
-                          <th className="text-center py-3 px-3 text-sm font-semibold border-b bg-blue-50 min-w-[80px]">
+                          <th className="text-center py-3 px-3 text-sm font-semibold border-b bg-blue-50">
                             Total
                           </th>
-                          <th className="text-center py-3 px-3 text-sm font-semibold border-b bg-green-50 min-w-[80px]">
+                          <th className="text-center py-3 px-3 text-sm font-semibold border-b bg-green-50">
                             %
                           </th>
                         </tr>
@@ -1173,49 +931,45 @@ export default function ClassroomDetailsClient({
                       <tbody>
                         {filteredAttendanceData.students.map((student) => {
                           let presentCount = 0;
-                          const sessionStatuses =
+                          const statuses =
                             filteredAttendanceData.sessionDates.map((date) => {
-                              const status = student.attendances[date];
-                              if (status === 'present') {
+                              if (student.attendances[date] === 'present') {
                                 presentCount++;
                                 return 'P';
                               }
                               return 'A';
                             });
-                          const badge = getStatusBadge(student.percentage);
                           return (
                             <tr
                               key={student.studentId}
                               className="border-b hover:bg-gray-50"
                             >
-                              <td className="sticky left-0 bg-white py-3 px-4 border-r">
-                                <p className="font-medium">
-                                  {student.studentName}
-                                </p>
+                              <td className="sticky left-0 bg-white py-3 px-4 border-r font-medium">
+                                {student.studentName}
                               </td>
                               <td className="sticky left-32 bg-white py-3 px-4 text-sm font-mono border-r">
                                 {student.rollNumber || '-'}
                               </td>
-                              {sessionStatuses.map((status, idx) => (
+                              {statuses.map((s, i) => (
                                 <td
-                                  key={idx}
+                                  key={i}
                                   className={`text-center py-3 px-2 text-sm font-semibold ${
-                                    status === 'P'
+                                    s === 'P'
                                       ? 'text-green-600 bg-green-50'
                                       : 'text-red-600 bg-red-50'
                                   }`}
                                 >
-                                  {status}
+                                  {s}
                                 </td>
                               ))}
                               <td className="text-center py-3 px-3 text-sm font-bold bg-blue-50">
-                                <span className="text-blue-700 font-semibold">
-                                  {presentCount}
-                                </span>
+                                {presentCount}
                               </td>
                               <td className="text-center py-3 px-3 text-sm font-bold">
                                 <span
-                                  className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${badge.bg}`}
+                                  className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(
+                                    student.percentage
+                                  )}`}
                                 >
                                   {student.percentage.toFixed(1)}%
                                 </span>
@@ -1229,19 +983,22 @@ export default function ClassroomDetailsClient({
                 )}
 
               {!isLoadingAttendance &&
-                filteredAttendanceData.sessionDates?.length === 0 && (
+                filteredAttendanceData.sessionDates.length === 0 && (
                   <div className="text-center py-12">
                     <Icons.Clipboard
                       size={48}
                       className="text-gray-300 mx-auto mb-3"
                     />
                     <p className="text-gray-500">
-                      No attendance records found for the selected date range.
+                      No attendance records found.
                     </p>
                     {isTeacher && (
                       <button
-                        onClick={openTakeAttendanceModal}
-                        className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                        onClick={() => {
+                          initializeAttendanceList();
+                          setShowAttendanceModal(true);
+                        }}
+                        className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg"
                       >
                         Take First Attendance
                       </button>
@@ -1250,10 +1007,37 @@ export default function ClassroomDetailsClient({
                 )}
             </div>
           )}
+
+          {/* Calendar Tab */}
+          {activeTab === 'calendar' && (
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-semibold">Academic Calendar</h3>
+                <button
+                  onClick={() => setShowAcademicCalendar(true)}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+                >
+                  <Icons.Expand size={16} /> Open Full Calendar
+                </button>
+              </div>
+              <div className="text-center py-12 bg-gray-50 rounded-xl">
+                <Icons.CalendarDays
+                  size={48}
+                  className="text-gray-300 mx-auto mb-3"
+                />
+                <p className="text-gray-500">
+                  Click the button above to open the full academic calendar
+                </p>
+                <p className="text-gray-400 text-sm mt-1">
+                  Manage events, notices, and view attendance summary
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Take Attendance Modal */}
+      {/* Attendance Modal */}
       <AnimatePresence>
         {showAttendanceModal && (
           <motion.div
@@ -1272,11 +1056,12 @@ export default function ClassroomDetailsClient({
             >
               <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-800">
+                  <h2 className="text-xl font-bold">
                     {isEditMode ? 'Edit Attendance' : 'Take Attendance'}
                   </h2>
                   <p className="text-sm text-gray-500">
-                    {classroom.name} - {isEditMode ? editingDate : today}
+                    {classroom.name} -{' '}
+                    {isEditMode ? editingDate : new Date().toLocaleDateString()}
                   </p>
                 </div>
                 <button
@@ -1289,16 +1074,13 @@ export default function ClassroomDetailsClient({
                   <Icons.X size={20} />
                 </button>
               </div>
-
               <div className="p-6">
                 {/* Session Details */}
                 <div className="bg-gray-50 rounded-lg p-4 mb-6">
-                  <h3 className="font-semibold text-gray-800 mb-3">
-                    Session Details
-                  </h3>
+                  <h3 className="font-semibold mb-3">Session Details</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium mb-1">
                         Date *
                       </label>
                       <input
@@ -1310,12 +1092,12 @@ export default function ClassroomDetailsClient({
                             date: e.target.value,
                           })
                         }
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 border rounded-lg"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Start Time
+                      <label className="block text-sm font-medium mb-1">
+                        Start
                       </label>
                       <input
                         type="time"
@@ -1326,12 +1108,12 @@ export default function ClassroomDetailsClient({
                             startTime: e.target.value,
                           })
                         }
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 border rounded-lg"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        End Time
+                      <label className="block text-sm font-medium mb-1">
+                        End
                       </label>
                       <input
                         type="time"
@@ -1342,12 +1124,12 @@ export default function ClassroomDetailsClient({
                             endTime: e.target.value,
                           })
                         }
-                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
+                        className="w-full px-3 py-2 border rounded-lg"
                       />
                     </div>
                   </div>
                   <div className="mt-3">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium mb-1">
                       Syllabus Covered
                     </label>
                     <textarea
@@ -1359,108 +1141,77 @@ export default function ClassroomDetailsClient({
                           syllabusCovered: e.target.value,
                         })
                       }
-                      className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500"
-                      placeholder="Topics covered in today's session..."
+                      className="w-full px-3 py-2 border rounded-lg"
+                      placeholder="Topics covered..."
                     />
                   </div>
                 </div>
 
                 {/* Bulk Actions */}
                 <div className="flex justify-between items-center mb-4">
-                  <h3 className="font-semibold text-gray-800">
-                    Student Attendance
-                  </h3>
+                  <h3 className="font-semibold">Students</h3>
                   <div className="flex gap-2">
                     <button
                       onClick={markAllPresent}
-                      className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1"
+                      className="px-3 py-1 text-sm bg-green-100 text-green-700 rounded-lg"
                     >
                       <Icons.CheckSquare size={14} /> All Present
                     </button>
                     <button
                       onClick={markAllAbsent}
-                      className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg hover:bg-red-200 flex items-center gap-1"
+                      className="px-3 py-1 text-sm bg-red-100 text-red-700 rounded-lg"
                     >
                       <Icons.X size={14} /> All Absent
                     </button>
                   </div>
                 </div>
 
-                {/* Attendance Table */}
-                <div className="overflow-x-auto border rounded-lg">
+                {/* Student List */}
+                <div className="border rounded-lg overflow-hidden">
                   <table className="w-full">
-                    <thead className="bg-gray-50 border-b">
+                    <thead className="bg-gray-50">
                       <tr>
-                        <th className="text-left py-3 px-4 w-10">
-                          <input
-                            type="checkbox"
-                            checked={studentAttendance.every(
-                              (s) => s.status === 'present'
-                            )}
-                            onChange={(e) =>
-                              toggleAllAttendance(
-                                e.target.checked ? 'present' : 'absent'
-                              )
-                            }
-                            className="rounded border-gray-300 text-indigo-600"
-                          />
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold">
-                          Roll Number
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold">
-                          Student Name
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold">
+                        <th className="py-2 px-4 text-left text-sm">Roll No</th>
+                        <th className="py-2 px-4 text-left text-sm">Name</th>
+                        <th className="py-2 px-4 text-center text-sm w-24">
                           Status
                         </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold">
-                          Remarks
-                        </th>
+                        <th className="py-2 px-4 text-left text-sm">Remarks</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {studentAttendance.map((student) => (
+                      {studentAttendance.map((s) => (
                         <tr
-                          key={student.studentId}
-                          className="border-b hover:bg-gray-50"
+                          key={s.studentId}
+                          className="border-t hover:bg-gray-50"
                         >
-                          <td className="py-3 px-4">
-                            <input
-                              type="checkbox"
-                              checked={student.status === 'present'}
-                              onChange={() =>
-                                toggleAttendance(student.studentId)
-                              }
-                              className="rounded border-gray-300 text-indigo-600"
-                            />
+                          <td className="py-2 px-4 text-sm">
+                            {s.rollNumber || '-'}
                           </td>
-                          <td className="py-3 px-4 text-sm">
-                            {student.rollNumber || '-'}
+                          <td className="py-2 px-4 font-medium">
+                            {s.studentName}
                           </td>
-                          <td className="py-3 px-4">
-                            <p className="font-medium">{student.studentName}</p>
-                          </td>
-                          <td className="py-3 px-4">
-                            <span
-                              className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
-                                student.status === 'present'
+                          <td className="py-2 px-4 text-center">
+                            <button
+                              onClick={() => toggleAttendance(s.studentId)}
+                              className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                s.status === 'present'
                                   ? 'bg-green-100 text-green-800'
                                   : 'bg-red-100 text-red-800'
                               }`}
                             >
-                              {student.status.toUpperCase()}
-                            </span>
+                              {s.status.toUpperCase()}
+                            </button>
                           </td>
-                          <td className="py-3 px-4">
+                          <td className="py-2 px-4">
                             <input
                               type="text"
-                              placeholder="Remarks..."
-                              value={student.remarks}
+                              value={s.remarks}
                               onChange={(e) =>
-                                updateRemarks(student.studentId, e.target.value)
+                                updateRemarks(s.studentId, e.target.value)
                               }
-                              className="w-full px-2 py-1 text-sm border rounded focus:ring-1 focus:ring-indigo-500"
+                              className="w-full px-2 py-1 text-sm border rounded"
+                              placeholder="Remarks..."
                             />
                           </td>
                         </tr>
@@ -1469,13 +1220,13 @@ export default function ClassroomDetailsClient({
                   </table>
                 </div>
 
-                {/* Summary */}
+                {/* Summary & Actions */}
                 <div className="mt-4 p-3 bg-gray-50 rounded-lg flex justify-between items-center">
-                  <div>
-                    <span className="text-sm text-gray-600">
+                  <div className="flex gap-4 text-sm">
+                    <span>
                       Total: <strong>{studentAttendance.length}</strong>
                     </span>
-                    <span className="text-sm text-gray-600 ml-4">
+                    <span>
                       Present:{' '}
                       <strong className="text-green-600">
                         {
@@ -1485,7 +1236,7 @@ export default function ClassroomDetailsClient({
                         }
                       </strong>
                     </span>
-                    <span className="text-sm text-gray-600 ml-4">
+                    <span>
                       Absent:{' '}
                       <strong className="text-red-600">
                         {
@@ -1501,13 +1252,13 @@ export default function ClassroomDetailsClient({
                         setShowAttendanceModal(false);
                         resetAttendanceForm();
                       }}
-                      className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                      className="px-4 py-2 border rounded-lg"
                       disabled={submitting}
                     >
                       Cancel
                     </button>
                     <button
-                      onClick={saveUpdatedAttendance}
+                      onClick={saveAttendance}
                       disabled={submitting}
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
                     >
@@ -1526,10 +1277,22 @@ export default function ClassroomDetailsClient({
         )}
       </AnimatePresence>
 
+      {/* Academic Calendar Modal */}
+      <AnimatePresence>
+        {showAcademicCalendar && (
+          <AcademicCalendar3D
+            classroomId={classroom.id}
+            batchId={classroom.batchId}
+            isOpen={showAcademicCalendar}
+            onClose={() => setShowAcademicCalendar(false)}
+          />
+        )}
+      </AnimatePresence>
+
       {/* Custom Modal */}
       <CustomModal
         isOpen={modal.isOpen}
-        onClose={() => setModal({ ...modal, isOpen: false })}
+        onClose={() => setModal((prev) => ({ ...prev, isOpen: false }))}
         onConfirm={modal.onConfirm}
         title={modal.title}
         message={modal.message}
