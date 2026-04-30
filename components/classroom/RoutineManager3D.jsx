@@ -24,7 +24,7 @@ import {
   Coffee,
 } from 'lucide-react';
 
-const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
 const TIME_SLOTS = [
   { id: 0, display: '07:01-07:30' },
