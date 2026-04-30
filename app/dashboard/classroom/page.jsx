@@ -8,7 +8,8 @@ import { usePermissions } from '@/hooks/usePermissions';
 import ClassroomFormModal from '@/components/classroom/ClassroomFormModal';
 import AttendanceSummaryReport from '@/components/classroom/AttendanceSummaryReport';
 import AcademicCalendar3D from '@/components/classroom/AcademicCalendar3D';
-import { Calendar } from 'lucide-react';
+import RoutineManager3D from '@/components/classroom/RoutineManager3D';
+import { Calendar, Clock } from 'lucide-react';
 
 function LoadingState() {
   return (
@@ -41,6 +42,7 @@ const BatchAccordion = ({
   onEdit,
   onDelete,
   onOpenCalendar,
+  onOpenRoutine,
   hasUpdatePermission,
   hasDeletePermission,
   studentCount,
@@ -104,6 +106,16 @@ const BatchAccordion = ({
             title="Open Batch Calendar"
           >
             <Icons.CalendarDays size={14} /> Batch Calendar
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenRoutine(null, batch.id);
+            }}
+            className="px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1.5 transition-colors"
+            title="Open Batch Routine"
+          >
+            <Clock size={14} /> Routine
           </button>
           <span
             className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -250,6 +262,19 @@ const BatchAccordion = ({
                               >
                                 <Icons.CalendarDays size={16} />
                               </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenRoutine(
+                                    classroom.id,
+                                    classroom.batchId
+                                  );
+                                }}
+                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
+                                title="Classroom Routine"
+                              >
+                                <Clock size={16} />
+                              </button>
                               {hasUpdatePermission && (
                                 <button
                                   onClick={() => onEdit(classroom)}
@@ -296,6 +321,9 @@ export default function ClassroomPage() {
   const [showAcademicCalendar, setShowAcademicCalendar] = useState(false);
   const [calendarClassroomId, setCalendarClassroomId] = useState(null);
   const [calendarBatchId, setCalendarBatchId] = useState(null);
+  const [showRoutineManager, setShowRoutineManager] = useState(false);
+  const [routineClassroomId, setRoutineClassroomId] = useState(null);
+  const [routineBatchId, setRoutineBatchId] = useState(null);
   const [groupedClassrooms, setGroupedClassrooms] = useState({});
   const [batchStudentCounts, setBatchStudentCounts] = useState({});
   const [expandedBatches, setExpandedBatches] = useState({});
@@ -308,6 +336,12 @@ export default function ClassroomPage() {
   const hasCreatePermission = can('classroom', 'create');
   const hasUpdatePermission = can('classroom', 'update');
   const hasDeletePermission = can('classroom', 'delete');
+
+  const handleOpenRoutine = (classroomId = null, batchId = null) => {
+    setRoutineClassroomId(classroomId);
+    setRoutineBatchId(batchId);
+    setShowRoutineManager(true);
+  };
 
   const handleOpenCalendar = (classroomId = null, batchId = null) => {
     setCalendarClassroomId(classroomId);
@@ -410,8 +444,10 @@ export default function ClassroomPage() {
     () => setRefreshTrigger((prev) => prev + 1),
     []
   );
+
   const toggleBatch = (batchKey) =>
     setExpandedBatches((prev) => ({ ...prev, [batchKey]: !prev[batchKey] }));
+
   const toggleAllBatches = () => {
     const newExpandAll = !expandAll;
     setExpandAll(newExpandAll);
@@ -588,7 +624,7 @@ export default function ClassroomPage() {
                   Classroom Management
                 </h1>
                 <p className="text-sm text-gray-500 mt-1">
-                  Grouped by batch with academic calendar
+                  Grouped by batch with academic calendar & routine management
                 </p>
               </div>
               <div className="flex gap-3 flex-wrap">
@@ -603,6 +639,12 @@ export default function ClassroomPage() {
                   className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
                 >
                   <Icons.CalendarDays size={18} /> Global Calendar
+                </button>
+                <button
+                  onClick={() => handleOpenRoutine(null, null)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                >
+                  <Clock size={18} /> Routine Manager
                 </button>
                 <button
                   onClick={() => setShowAttendanceReport(true)}
@@ -752,6 +794,7 @@ export default function ClassroomPage() {
                 }}
                 onDelete={handleDeleteClassroom}
                 onOpenCalendar={handleOpenCalendar}
+                onOpenRoutine={handleOpenRoutine}
                 hasUpdatePermission={hasUpdatePermission}
                 hasDeletePermission={hasDeletePermission}
                 studentCount={getBatchStudentCount(batchKey, data.batch.id)}
@@ -771,6 +814,7 @@ export default function ClassroomPage() {
         initialData={editingClassroom}
         loading={formLoading}
       />
+
       <AnimatePresence>
         {showAttendanceReport && (
           <AttendanceSummaryReport
@@ -778,6 +822,7 @@ export default function ClassroomPage() {
           />
         )}
       </AnimatePresence>
+
       <AnimatePresence>
         {showAcademicCalendar && (
           <AcademicCalendar3D
@@ -785,6 +830,17 @@ export default function ClassroomPage() {
             batchId={calendarBatchId}
             isOpen={showAcademicCalendar}
             onClose={() => setShowAcademicCalendar(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showRoutineManager && (
+          <RoutineManager3D
+            classroomId={routineClassroomId}
+            batchId={routineBatchId}
+            isOpen={showRoutineManager}
+            onClose={() => setShowRoutineManager(false)}
           />
         )}
       </AnimatePresence>

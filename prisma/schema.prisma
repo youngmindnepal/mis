@@ -123,6 +123,7 @@ model Batch {
   exams           Exam[]
   courseLists      CourseList[]
   examConfigs      ExamConfig[]
+  routines        Routine[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -196,6 +197,7 @@ model Course {
   classrooms      Classroom[]
   courseLists      CourseList[]
   results         Result[]
+  routines        Routine[]
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
 }
@@ -234,6 +236,7 @@ model Faculty {
   user            User?            @relation(fields: [userId], references: [id])
   classrooms      Classroom[]
   sessions        ClassSession[]
+  routines        Routine[]
   
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -265,6 +268,7 @@ model Classroom {
   attendanceSummary AttendanceSummary[]
   exams           Exam[]
   results         Result[]
+  routines        Routine[]
   
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -617,4 +621,57 @@ enum NoticeType {
   result_notice
   class_start_notice
   general_notice
+}
+
+// Add this model to your schema.prisma file
+
+model Routine {
+  id            Int            @id @default(autoincrement())
+  
+  // Core schedule
+  day           Int            // 0=Sunday, 1=Monday, ... 5=Friday
+  timeSlot      Int            // Start slot ID (0-13)
+  timeSlotEnd   Int?           // End slot ID for merged/merged routines
+  
+  // Content
+  subject       String?        // Subject or description
+  
+  // Relations
+  facultyId     Int?
+  faculty       Faculty?        @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+  
+  batchId       Int?
+  batch         Batch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  
+  classroomId   Int?
+  classroom     Classroom?     @relation(fields: [classroomId], references: [id], onDelete: SetNull)
+  
+  courseId      Int?
+  course        Course?        @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  
+  // Room info
+  roomNumber    String?        // Manual room number input
+  
+  // Status
+  status        RoutineStatus  @default(active)
+  
+  // Notes
+  notes         String?
+  
+  // Timestamps
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  @@index([day, timeSlot])
+  @@index([facultyId])
+  @@index([batchId])
+  @@index([classroomId])
+  @@index([day, facultyId])
+}
+
+enum RoutineStatus {
+  active
+  cancelled
+  makeup
+  break
 }
