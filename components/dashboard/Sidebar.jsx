@@ -373,7 +373,7 @@ export default function Sidebar({ session: propSession }) {
         >
           <div className="relative w-12 h-12 flex-shrink-0">
             <Image
-              src="/admissionguru.png"
+              src="/achs.png"
               alt="Logo"
               fill
               className="rounded-xl object-contain"
@@ -382,7 +382,7 @@ export default function Sidebar({ session: propSession }) {
           </div>
           <div>
             <span className="text-lg font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              AdmissionGuru
+              ACHS MIS
             </span>
             <p className="text-xs text-white/40">Admin Panel</p>
           </div>

@@ -9,8 +9,8 @@ import ClassroomFormModal from '@/components/classroom/ClassroomFormModal';
 import AttendanceSummaryReport from '@/components/classroom/AttendanceSummaryReport';
 import AcademicCalendar3D from '@/components/classroom/AcademicCalendar3D';
 import RoutineManager3D from '@/components/classroom/RoutineManager3D';
-import { Calendar, Clock } from 'lucide-react';
-
+import { Calendar, Clock, Library } from 'lucide-react';
+import ELibrarySearch from '@/components/library/ELibrarySearch';
 function LoadingState() {
   return (
     <div className="p-6">
@@ -331,7 +331,7 @@ export default function ClassroomPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [expandAll, setExpandAll] = useState(false);
-
+  const [showELibrary, setShowELibrary] = useState(false);
   const hasReadPermission = can('classroom', 'read');
   const hasCreatePermission = can('classroom', 'create');
   const hasUpdatePermission = can('classroom', 'update');
@@ -647,6 +647,12 @@ export default function ClassroomPage() {
                   <Clock size={18} /> Routine Manager
                 </button>
                 <button
+                  onClick={() => setShowELibrary(true)}
+                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+                >
+                  <Library size={18} /> E-Library
+                </button>
+                <button
                   onClick={() => setShowAttendanceReport(true)}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
                 >
@@ -841,6 +847,15 @@ export default function ClassroomPage() {
             batchId={routineBatchId}
             isOpen={showRoutineManager}
             onClose={() => setShowRoutineManager(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showELibrary && (
+          <ELibrarySearch
+            isOpen={showELibrary}
+            onClose={() => setShowELibrary(false)}
           />
         )}
       </AnimatePresence>

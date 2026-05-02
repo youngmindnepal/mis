@@ -154,7 +154,7 @@ export default function LoginForm() {
             <div className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full  mb-4">
               {/* Replace the text with image */}
               <img
-                src="/admissionguru.png"
+                src="/achs.png"
                 alt="Admission Guru"
                 className="h-32 w-auto object-contain"
               />
