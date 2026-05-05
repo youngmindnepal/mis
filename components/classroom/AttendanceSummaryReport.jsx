@@ -1,27 +1,39 @@
 // components/classroom/AttendanceSummaryReport.jsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { motion } from 'framer-motion';
 import * as Icons from 'lucide-react';
 import { pdf } from '@react-pdf/renderer';
 import AttendancePDFDocument from './AttendancePDFDocument';
 
-export default function AttendanceSummaryReport({ onClose }) {
+export default function AttendanceSummaryReport({
+  onClose,
+  preSelectedBatch = '',
+  preSelectedStartDate = '',
+  preSelectedEndDate = '',
+  batchName = '',
+}) {
   const [batches, setBatches] = useState([]);
-  const [selectedBatch, setSelectedBatch] = useState('');
+  const [selectedBatch, setSelectedBatch] = useState(preSelectedBatch);
   const [attendanceData, setAttendanceData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [dateRange, setDateRange] = useState({
-    startDate: new Date(new Date().setMonth(new Date().getMonth() - 1))
-      .toISOString()
-      .split('T')[0],
-    endDate: new Date().toISOString().split('T')[0],
+    startDate:
+      preSelectedStartDate ||
+      new Date(new Date().setMonth(new Date().getMonth() - 1))
+        .toISOString()
+        .split('T')[0],
+    endDate: preSelectedEndDate || new Date().toISOString().split('T')[0],
   });
   const [showOnlyActive, setShowOnlyActive] = useState(true);
 
-  // Fetch batches
+  // Track if initial auto-fetch has been done
+  const hasAutoFetched = useRef(false);
+
+  // Fetch batches on mount
   useEffect(() => {
     fetchBatches();
   }, []);
@@ -36,7 +48,7 @@ export default function AttendanceSummaryReport({ onClose }) {
     }
   };
 
-  const fetchAttendanceSummary = async () => {
+  const fetchAttendanceSummary = useCallback(async () => {
     if (!selectedBatch) {
       alert('Please select a batch');
       return;
@@ -44,7 +56,18 @@ export default function AttendanceSummaryReport({ onClose }) {
 
     setLoading(true);
     try {
-      const url = `/api/classrooms/attendance/summary?batchId=${selectedBatch}&startDate=${dateRange.startDate}&endDate=${dateRange.endDate}&activeOnly=${showOnlyActive}`;
+      const params = new URLSearchParams({
+        batchId: selectedBatch,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        activeOnly: showOnlyActive,
+      });
+
+      if (searchQuery.trim()) {
+        params.append('search', searchQuery.trim());
+      }
+
+      const url = `/api/classrooms/attendance/summary?${params.toString()}`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -75,26 +98,107 @@ export default function AttendanceSummaryReport({ onClose }) {
     } finally {
       setLoading(false);
     }
+  }, [
+    selectedBatch,
+    dateRange.startDate,
+    dateRange.endDate,
+    showOnlyActive,
+    searchQuery,
+  ]);
+
+  // Auto-trigger report if batch is pre-selected with dates
+  useEffect(() => {
+    if (preSelectedBatch && !hasAutoFetched.current) {
+      hasAutoFetched.current = true;
+      // Wait for batches to load before auto-fetching
+      const timer = setTimeout(() => {
+        fetchAttendanceSummary();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [preSelectedBatch, fetchAttendanceSummary]);
+
+  // Update selected batch when preSelectedBatch prop changes
+  useEffect(() => {
+    if (preSelectedBatch) {
+      setSelectedBatch(preSelectedBatch);
+    }
+  }, [preSelectedBatch]);
+
+  // Update date range when preSelected dates change
+  useEffect(() => {
+    if (preSelectedStartDate) {
+      setDateRange((prev) => ({ ...prev, startDate: preSelectedStartDate }));
+    }
+    if (preSelectedEndDate) {
+      setDateRange((prev) => ({ ...prev, endDate: preSelectedEndDate }));
+    }
+  }, [preSelectedStartDate, preSelectedEndDate]);
+
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchQuery(value);
   };
+
+  // Trigger API call when search query changes (with debounce)
+  useEffect(() => {
+    if (!selectedBatch || !attendanceData) return;
+
+    const timeoutId = setTimeout(() => {
+      fetchAttendanceSummary();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [searchQuery, showOnlyActive]);
+
+  // Client-side filtering as fallback
+  const filteredStudentReport = useMemo(() => {
+    if (!attendanceData?.studentReport) return [];
+
+    if (attendanceData.appliedFilter) {
+      return attendanceData.studentReport;
+    }
+
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return attendanceData.studentReport;
+
+    return attendanceData.studentReport.filter((student) => {
+      const name = (student.studentName || '').toLowerCase();
+      const rollNo = (student.rollNo || '').toLowerCase();
+      const enrollmentNo = (student.enrollmentNo || '').toLowerCase();
+      const email = (student.email || '').toLowerCase();
+
+      return (
+        name.includes(query) ||
+        rollNo.includes(query) ||
+        enrollmentNo.includes(query) ||
+        email.includes(query)
+      );
+    });
+  }, [attendanceData, searchQuery]);
 
   // Export to CSV
   const handleExportCSV = () => {
-    if (!attendanceData) return;
+    if (!attendanceData || filteredStudentReport.length === 0) {
+      alert('No data to export');
+      return;
+    }
 
     setExporting(true);
     try {
-      const { studentReport, subjects, batch, dateRange } = attendanceData;
+      const { subjects, batch, dateRange } = attendanceData;
+      const exportData = filteredStudentReport;
 
-      // Create CSV content
       let csv = '';
-
-      // Header info
       csv += `"BATCH: ${batch.name} (${batch.academicYear})"\n`;
       csv += `"Period: ${dateRange.startDate} to ${dateRange.endDate}"\n`;
-      csv += `"Generated: ${new Date().toLocaleDateString()}"\n\n`;
+      csv += `"Generated: ${new Date().toLocaleDateString()}"\n`;
+      if (searchQuery) {
+        csv += `"Filter: "${searchQuery}"\n`;
+      }
+      csv += '\n';
 
-      // Column headers
-      csv += '"Student Name","Email/Enrollment","Status"';
+      csv += '"Student Name","Roll No","Email/Enrollment","Status"';
       subjects.forEach((subject) => {
         csv += `,"${subject.name} (%)"`;
       });
@@ -103,20 +207,17 @@ export default function AttendanceSummaryReport({ onClose }) {
       });
       csv += '\n';
 
-      // Data rows
-      studentReport.forEach((student) => {
-        csv += `"${student.studentName}","${
+      exportData.forEach((student) => {
+        csv += `"${student.studentName}","${student.rollNo || 'N/A'}","${
           student.email || student.enrollmentNo || 'N/A'
         }","${student.status || 'N/A'}"`;
 
-        // Percentage columns
         student.subjects.forEach((subject) => {
           csv += `,${
             subject.totalClasses > 0 ? subject.percentage + '%' : '-'
           }`;
         });
 
-        // P/A columns
         student.subjects.forEach((subject) => {
           csv += `,"${
             subject.totalClasses > 0
@@ -128,20 +229,28 @@ export default function AttendanceSummaryReport({ onClose }) {
         csv += '\n';
       });
 
-      // Summary statistics
       csv += '\n"SUMMARY STATISTICS"\n';
-      csv += `"Total Students",${studentReport.length}\n`;
+      csv += `"Total Students (Filtered)",${exportData.length}\n`;
       csv += `"Total Subjects",${subjects.length}\n`;
-      csv += `"Above 75%",${attendanceData.studentStats?.above75 || 0}\n`;
-      csv += `"60% - 75%",${
-        attendanceData.studentStats?.between60And75 || 0
-      }\n`;
-      csv += `"Below 60%",${attendanceData.studentStats?.below60 || 0}\n`;
-      csv += `"No Attendance",${
-        attendanceData.studentStats?.noAttendance || 0
-      }\n`;
 
-      // Download CSV
+      const above75 = exportData.filter(
+        (s) => s.overall.percentage >= 75
+      ).length;
+      const between60And75 = exportData.filter(
+        (s) => s.overall.percentage >= 60 && s.overall.percentage < 75
+      ).length;
+      const below60 = exportData.filter(
+        (s) => s.overall.percentage < 60 && s.overall.totalClasses > 0
+      ).length;
+      const noAttendance = exportData.filter(
+        (s) => s.overall.totalClasses === 0
+      ).length;
+
+      csv += `"Above 75%",${above75}\n`;
+      csv += `"60% - 75%",${between60And75}\n`;
+      csv += `"Below 60%",${below60}\n`;
+      csv += `"No Attendance",${noAttendance}\n`;
+
       const blob = new Blob(['\ufeff' + csv], {
         type: 'text/csv;charset=utf-8;',
       });
@@ -167,18 +276,24 @@ export default function AttendanceSummaryReport({ onClose }) {
     }
   };
 
-  // Export to PDF using @react-pdf/renderer
+  // Export to PDF
   const handleExportPDF = async () => {
-    if (!attendanceData) return;
+    if (!attendanceData || filteredStudentReport.length === 0) {
+      alert('No data to export');
+      return;
+    }
 
     setExporting(true);
     try {
-      // Generate PDF blob
+      const filteredData = {
+        ...attendanceData,
+        studentReport: filteredStudentReport,
+      };
+
       const blob = await pdf(
-        <AttendancePDFDocument attendanceData={attendanceData} />
+        <AttendancePDFDocument attendanceData={filteredData} />
       ).toBlob();
 
-      // Create download link
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -199,19 +314,44 @@ export default function AttendanceSummaryReport({ onClose }) {
     }
   };
 
-  // Helper function to get progress bar color
   const getProgressColor = (percentage) => {
     if (percentage >= 75) return 'bg-green-500';
     if (percentage >= 60) return 'bg-yellow-500';
     return 'bg-red-500';
   };
 
-  // Get student report data
-  const studentReport = attendanceData?.studentReport || [];
-  const activeCount = studentReport.filter((s) => s.status === 'active').length;
-  const inactiveCount = studentReport.filter(
+  const getProgressTextColor = (percentage) => {
+    if (percentage >= 75) return 'text-green-600';
+    if (percentage >= 60) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const activeCount = filteredStudentReport.filter(
+    (s) => s.status === 'active'
+  ).length;
+  const inactiveCount = filteredStudentReport.filter(
     (s) => s.status !== 'active'
   ).length;
+
+  const filteredStats = useMemo(
+    () => ({
+      above75: filteredStudentReport.filter((s) => s.overall.percentage >= 75)
+        .length,
+      between60And75: filteredStudentReport.filter(
+        (s) => s.overall.percentage >= 60 && s.overall.percentage < 75
+      ).length,
+      below60: filteredStudentReport.filter(
+        (s) => s.overall.percentage < 60 && s.overall.totalClasses > 0
+      ).length,
+      noAttendance: filteredStudentReport.filter(
+        (s) => s.overall.totalClasses === 0
+      ).length,
+    }),
+    [filteredStudentReport]
+  );
+
+  // Get batch display name
+  const displayBatchName = batchName || attendanceData?.batch?.name || '';
 
   return (
     <motion.div
@@ -235,7 +375,14 @@ export default function AttendanceSummaryReport({ onClose }) {
                 Student Attendance Report
               </h2>
               <p className="text-indigo-100 text-sm mt-1">
-                Attendance percentage across all subjects
+                {displayBatchName
+                  ? `${displayBatchName} - Attendance across all subjects`
+                  : 'Attendance percentage across all subjects'}
+                {searchQuery && (
+                  <span className="ml-2 text-white bg-white/20 px-2 py-0.5 rounded-full text-xs">
+                    Filtered: "{searchQuery}"
+                  </span>
+                )}
               </p>
             </div>
             <button
@@ -259,6 +406,7 @@ export default function AttendanceSummaryReport({ onClose }) {
                 onChange={(e) => {
                   setSelectedBatch(e.target.value);
                   setAttendanceData(null);
+                  setSearchQuery('');
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
@@ -302,7 +450,7 @@ export default function AttendanceSummaryReport({ onClose }) {
             <div className="flex items-end gap-2">
               <button
                 onClick={fetchAttendanceSummary}
-                disabled={loading}
+                disabled={loading || !selectedBatch}
                 className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 {loading ? (
@@ -320,36 +468,61 @@ export default function AttendanceSummaryReport({ onClose }) {
             </div>
           </div>
 
-          {/* Active Student Filter Toggle */}
+          {/* Search and Active Filter Row */}
           <div className="flex items-center gap-4 mt-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={showOnlyActive}
-                onChange={(e) => {
-                  setShowOnlyActive(e.target.checked);
-                  setAttendanceData(null);
-                }}
-                className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+            {/* Student Search Input */}
+            <div className="flex-1 relative">
+              <Icons.Search
+                size={18}
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
               />
-              <span className="text-sm font-medium text-gray-700">
-                Show only active students
-              </span>
-            </label>
-            {attendanceData && !showOnlyActive && (
-              <div className="flex items-center gap-3 text-sm">
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                  <span className="text-gray-600">Active: {activeCount}</span>
+              <input
+                type="text"
+                placeholder="Search by name, roll number, or enrollment number..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <Icons.X size={18} />
+                </button>
+              )}
+            </div>
+
+            {/* Active Student Filter Toggle */}
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={showOnlyActive}
+                  onChange={(e) => setShowOnlyActive(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                />
+                <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                  Show only active students
                 </span>
-                <span className="flex items-center gap-1">
-                  <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
-                  <span className="text-gray-600">
-                    Inactive: {inactiveCount}
+              </label>
+              {attendanceData && !showOnlyActive && (
+                <div className="flex items-center gap-3 text-sm">
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    <span className="text-gray-600 whitespace-nowrap">
+                      Active: {activeCount}
+                    </span>
                   </span>
-                </span>
-              </div>
-            )}
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                    <span className="text-gray-600 whitespace-nowrap">
+                      Inactive: {inactiveCount}
+                    </span>
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -362,7 +535,11 @@ export default function AttendanceSummaryReport({ onClose }) {
                   size={48}
                   className="animate-spin text-indigo-600 mx-auto mb-4"
                 />
-                <p className="text-gray-600">Generating attendance report...</p>
+                <p className="text-gray-600">
+                  {searchQuery
+                    ? 'Searching students...'
+                    : 'Generating attendance report...'}
+                </p>
               </div>
             </div>
           ) : attendanceData ? (
@@ -376,7 +553,7 @@ export default function AttendanceSummaryReport({ onClose }) {
                         Above 75%
                       </p>
                       <p className="text-2xl font-bold text-green-900">
-                        {attendanceData.studentStats?.above75 || 0}
+                        {filteredStats.above75}
                       </p>
                     </div>
                     <Icons.TrendingUp size={24} className="text-green-600" />
@@ -389,7 +566,7 @@ export default function AttendanceSummaryReport({ onClose }) {
                         60% - 75%
                       </p>
                       <p className="text-2xl font-bold text-yellow-900">
-                        {attendanceData.studentStats?.between60And75 || 0}
+                        {filteredStats.between60And75}
                       </p>
                     </div>
                     <Icons.Minimize size={24} className="text-yellow-600" />
@@ -402,7 +579,7 @@ export default function AttendanceSummaryReport({ onClose }) {
                         Below 60%
                       </p>
                       <p className="text-2xl font-bold text-red-900">
-                        {attendanceData.studentStats?.below60 || 0}
+                        {filteredStats.below60}
                       </p>
                     </div>
                     <Icons.TrendingDown size={24} className="text-red-600" />
@@ -415,7 +592,7 @@ export default function AttendanceSummaryReport({ onClose }) {
                         No Attendance
                       </p>
                       <p className="text-2xl font-bold text-gray-900">
-                        {attendanceData.studentStats?.noAttendance || 0}
+                        {filteredStats.noAttendance}
                       </p>
                     </div>
                     <Icons.HelpCircle size={24} className="text-gray-600" />
@@ -423,18 +600,31 @@ export default function AttendanceSummaryReport({ onClose }) {
                 </div>
               </div>
 
-              {/* 2D Student-Subject Matrix */}
+              {/* Student-Subject Matrix */}
               <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                  <h3 className="font-semibold text-gray-900">
-                    Student-wise Attendance Report
-                  </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Batch: {attendanceData.batch?.name} (
-                    {attendanceData.batch?.academicYear}) | Period:{' '}
-                    {attendanceData.dateRange?.startDate} to{' '}
-                    {attendanceData.dateRange?.endDate}
-                  </p>
+                <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">
+                      Student-wise Attendance Report
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Batch: {attendanceData.batch?.name} (
+                      {attendanceData.batch?.academicYear}) | Period:{' '}
+                      {attendanceData.dateRange?.startDate} to{' '}
+                      {attendanceData.dateRange?.endDate}
+                      {searchQuery && (
+                        <span className="ml-2 text-indigo-600 font-medium">
+                          | Filter: "{searchQuery}"
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  {searchQuery && (
+                    <span className="text-sm text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                      {filteredStudentReport.length} student
+                      {filteredStudentReport.length !== 1 ? 's' : ''} found
+                    </span>
+                  )}
                 </div>
 
                 <div className="overflow-x-auto">
@@ -452,15 +642,15 @@ export default function AttendanceSummaryReport({ onClose }) {
                           >
                             <div className="font-semibold">{subject.name}</div>
                             <div className="text-[10px] font-normal text-gray-400 mt-0.5">
-                              Total: {subject.totalClasses} classes
+                              {subject.totalClasses} classes
                             </div>
                           </th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {studentReport.length > 0 ? (
-                        studentReport.map((student) => (
+                      {filteredStudentReport.length > 0 ? (
+                        filteredStudentReport.map((student) => (
                           <tr
                             key={student.studentId}
                             className="hover:bg-gray-50"
@@ -472,9 +662,17 @@ export default function AttendanceSummaryReport({ onClose }) {
                                     {student.studentName}
                                   </div>
                                   <div className="text-xs text-gray-500">
-                                    {student.email ||
-                                      student.enrollmentNo ||
-                                      'N/A'}
+                                    {student.rollNo !== 'N/A' && (
+                                      <span className="mr-2">
+                                        Roll: {student.rollNo}
+                                      </span>
+                                    )}
+                                    {student.enrollmentNo !== 'N/A' && (
+                                      <span>EN: {student.enrollmentNo}</span>
+                                    )}
+                                    {student.rollNo === 'N/A' &&
+                                      student.enrollmentNo === 'N/A' &&
+                                      student.email}
                                   </div>
                                 </div>
                                 {student.status !== 'active' && (
@@ -493,24 +691,9 @@ export default function AttendanceSummaryReport({ onClose }) {
                                   <div className="space-y-1.5 min-w-[70px]">
                                     <div className="text-lg font-bold">
                                       <span
-                                        className={`
-                                          ${
-                                            subject.percentage >= 75
-                                              ? 'text-green-600'
-                                              : ''
-                                          }
-                                          ${
-                                            subject.percentage >= 60 &&
-                                            subject.percentage < 75
-                                              ? 'text-yellow-600'
-                                              : ''
-                                          }
-                                          ${
-                                            subject.percentage < 60
-                                              ? 'text-red-600'
-                                              : ''
-                                          }
-                                        `}
+                                        className={getProgressTextColor(
+                                          subject.percentage
+                                        )}
                                       >
                                         {subject.percentage}%
                                       </span>
@@ -550,9 +733,11 @@ export default function AttendanceSummaryReport({ onClose }) {
                             colSpan={attendanceData.subjects.length + 1}
                             className="px-4 py-8 text-center text-gray-500"
                           >
-                            {showOnlyActive
-                              ? 'No active students found in this batch.'
-                              : 'No students found in this batch.'}
+                            {searchQuery
+                              ? `No students found matching "${searchQuery}"`
+                              : showOnlyActive
+                              ? 'No active students found'
+                              : 'No students found'}
                           </td>
                         </tr>
                       )}
@@ -570,26 +755,29 @@ export default function AttendanceSummaryReport({ onClose }) {
                 No Report Generated
               </h3>
               <p className="text-gray-600">
-                Select a batch and date range, then click "Generate Report" to
-                view student attendance summary
+                {preSelectedBatch
+                  ? 'Loading report for ' +
+                    (displayBatchName || 'selected batch') +
+                    '...'
+                  : 'Select a batch and date range, then click "Generate Report"'}
               </p>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        {attendanceData && (
+        {attendanceData && filteredStudentReport.length > 0 && (
           <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
             <div className="text-sm text-gray-600">
-              Showing {studentReport.length} student
-              {studentReport.length !== 1 ? 's' : ''} | Total Subjects:{' '}
-              {attendanceData.summary?.totalSubjects || 0}
+              Showing {filteredStudentReport.length} student
+              {filteredStudentReport.length !== 1 ? 's' : ''}
+              {' | '}Subjects: {attendanceData.summary?.totalSubjects || 0}
             </div>
             <div className="flex gap-2">
               <button
                 onClick={handleExportPDF}
                 disabled={exporting}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 {exporting ? (
                   <Icons.Loader2 size={18} className="animate-spin" />
@@ -601,7 +789,7 @@ export default function AttendanceSummaryReport({ onClose }) {
               <button
                 onClick={handleExportCSV}
                 disabled={exporting}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2 disabled:opacity-50"
               >
                 {exporting ? (
                   <Icons.Loader2 size={18} className="animate-spin" />

@@ -1,14 +1,14 @@
 // components/classroom/ClassroomDetailsClient.jsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react'; // Added useMemo
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as Icons from 'lucide-react';
 import AcademicCalendar3D from '@/components/classroom/AcademicCalendar3D';
 
-// Custom Modal Component
+// Custom Modal Component (unchanged)
 const CustomModal = ({
   isOpen,
   onClose,
@@ -128,6 +128,9 @@ export default function ClassroomDetailsClient({
     sessionIsoDates: [],
   });
   const [isLoadingAttendance, setIsLoadingAttendance] = useState(false);
+
+  // ADD: Student search query for attendance tab
+  const [attendanceSearchQuery, setAttendanceSearchQuery] = useState('');
 
   // Modal state
   const [modal, setModal] = useState({
@@ -260,6 +263,9 @@ export default function ClassroomDetailsClient({
         sessionDates,
         sessionIsoDates,
       });
+
+      // Clear search when new data is fetched
+      setAttendanceSearchQuery('');
     } catch (err) {
       setErrorMessage(err.message);
     } finally {
@@ -270,6 +276,22 @@ export default function ClassroomDetailsClient({
   useEffect(() => {
     if (activeTab === 'attendance') fetchFilteredAttendance();
   }, [fromDate, toDate, activeTab]);
+
+  // ADD: Filter students based on search query
+  const filteredStudents = useMemo(() => {
+    const query = attendanceSearchQuery.toLowerCase().trim();
+    if (!query) return filteredAttendanceData.students;
+
+    return filteredAttendanceData.students.filter((student) => {
+      const nameMatch = (student.studentName || '')
+        .toLowerCase()
+        .includes(query);
+      const rollMatch = (student.rollNumber || '')
+        .toLowerCase()
+        .includes(query);
+      return nameMatch || rollMatch;
+    });
+  }, [filteredAttendanceData.students, attendanceSearchQuery]);
 
   // Attendance CRUD
   const initializeAttendanceList = () => {
@@ -467,10 +489,10 @@ export default function ClassroomDetailsClient({
       prev.map((s) => (s.studentId === studentId ? { ...s, remarks } : s))
     );
 
-  // Export CSV
+  // Export CSV - uses filtered students
   const exportAttendanceReport = () => {
     if (
-      !filteredAttendanceData.students.length ||
+      !filteredStudents.length ||
       !filteredAttendanceData.sessionDates.length
     ) {
       setErrorMessage('No data to export');
@@ -484,12 +506,7 @@ export default function ClassroomDetailsClient({
       'Total Sessions',
       'Percentage (%)',
     ];
-    const sorted = [...filteredAttendanceData.students].sort((a, b) =>
-      (a.studentName || '')
-        .toLowerCase()
-        .localeCompare((b.studentName || '').toLowerCase())
-    );
-    const rows = sorted.map((student) => {
+    const rows = filteredStudents.map((student) => {
       let presentCount = 0;
       const statuses = filteredAttendanceData.sessionDates.map((date) => {
         if (student.attendances[date] === 'present') {
@@ -789,18 +806,18 @@ export default function ClassroomDetailsClient({
           {/* Attendance Tab */}
           {activeTab === 'attendance' && (
             <div>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                 <h3 className="text-lg font-semibold">Attendance Report</h3>
                 <button
                   onClick={exportAttendanceReport}
-                  disabled={!filteredAttendanceData.students.length}
+                  disabled={!filteredStudents.length}
                   className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
                 >
                   <Icons.Download size={18} /> Export
                 </button>
               </div>
 
-              {/* Date Filter */}
+              {/* Date Filter & Search */}
               <div className="bg-gray-50 rounded-lg p-4 mb-6">
                 <div className="flex flex-wrap gap-4 items-end">
                   <div className="flex-1 min-w-[150px]">
@@ -835,6 +852,38 @@ export default function ClassroomDetailsClient({
                     <Icons.X size={16} /> Clear
                   </button>
                 </div>
+
+                {/* ADD: Student Search Input */}
+                <div className="mt-4 relative">
+                  <Icons.Search
+                    size={18}
+                    className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search student by name or roll number..."
+                    value={attendanceSearchQuery}
+                    onChange={(e) => setAttendanceSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                  />
+                  {attendanceSearchQuery && (
+                    <button
+                      onClick={() => setAttendanceSearchQuery('')}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <Icons.X size={18} />
+                    </button>
+                  )}
+                </div>
+
+                {/* ADD: Search Results Count */}
+                {attendanceSearchQuery &&
+                  filteredAttendanceData.students.length > 0 && (
+                    <div className="mt-2 text-sm text-indigo-600">
+                      Showing {filteredStudents.length} of{' '}
+                      {filteredAttendanceData.students.length} students
+                    </div>
+                  )}
               </div>
 
               {/* Loading */}
@@ -848,7 +897,7 @@ export default function ClassroomDetailsClient({
                 </div>
               )}
 
-              {/* Attendance Table */}
+              {/* Attendance Table - Updated to use filteredStudents */}
               {!isLoadingAttendance &&
                 filteredAttendanceData.sessionDates.length > 0 && (
                   <div className="overflow-x-auto">
@@ -929,54 +978,71 @@ export default function ClassroomDetailsClient({
                         </tr>
                       </thead>
                       <tbody>
-                        {filteredAttendanceData.students.map((student) => {
-                          let presentCount = 0;
-                          const statuses =
-                            filteredAttendanceData.sessionDates.map((date) => {
-                              if (student.attendances[date] === 'present') {
-                                presentCount++;
-                                return 'P';
-                              }
-                              return 'A';
-                            });
-                          return (
-                            <tr
-                              key={student.studentId}
-                              className="border-b hover:bg-gray-50"
-                            >
-                              <td className="sticky left-0 bg-white py-3 px-4 border-r font-medium">
-                                {student.studentName}
-                              </td>
-                              <td className="sticky left-32 bg-white py-3 px-4 text-sm font-mono border-r">
-                                {student.rollNumber || '-'}
-                              </td>
-                              {statuses.map((s, i) => (
-                                <td
-                                  key={i}
-                                  className={`text-center py-3 px-2 text-sm font-semibold ${
-                                    s === 'P'
-                                      ? 'text-green-600 bg-green-50'
-                                      : 'text-red-600 bg-red-50'
-                                  }`}
-                                >
-                                  {s}
+                        {filteredStudents.length > 0 ? (
+                          filteredStudents.map((student) => {
+                            let presentCount = 0;
+                            const statuses =
+                              filteredAttendanceData.sessionDates.map(
+                                (date) => {
+                                  if (student.attendances[date] === 'present') {
+                                    presentCount++;
+                                    return 'P';
+                                  }
+                                  return 'A';
+                                }
+                              );
+                            return (
+                              <tr
+                                key={student.studentId}
+                                className="border-b hover:bg-gray-50"
+                              >
+                                <td className="sticky left-0 bg-white py-3 px-4 border-r font-medium">
+                                  {student.studentName}
                                 </td>
-                              ))}
-                              <td className="text-center py-3 px-3 text-sm font-bold bg-blue-50">
-                                {presentCount}
-                              </td>
-                              <td className="text-center py-3 px-3 text-sm font-bold">
-                                <span
-                                  className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(
-                                    student.percentage
-                                  )}`}
-                                >
-                                  {student.percentage.toFixed(1)}%
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
+                                <td className="sticky left-32 bg-white py-3 px-4 text-sm font-mono border-r">
+                                  {student.rollNumber || '-'}
+                                </td>
+                                {statuses.map((s, i) => (
+                                  <td
+                                    key={i}
+                                    className={`text-center py-3 px-2 text-sm font-semibold ${
+                                      s === 'P'
+                                        ? 'text-green-600 bg-green-50'
+                                        : 'text-red-600 bg-red-50'
+                                    }`}
+                                  >
+                                    {s}
+                                  </td>
+                                ))}
+                                <td className="text-center py-3 px-3 text-sm font-bold bg-blue-50">
+                                  {presentCount}
+                                </td>
+                                <td className="text-center py-3 px-3 text-sm font-bold">
+                                  <span
+                                    className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(
+                                      student.percentage
+                                    )}`}
+                                  >
+                                    {student.percentage.toFixed(1)}%
+                                  </span>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan={
+                                filteredAttendanceData.sessionDates.length + 4
+                              }
+                              className="py-8 text-center text-gray-500"
+                            >
+                              {attendanceSearchQuery
+                                ? `No students found matching "${attendanceSearchQuery}"`
+                                : 'No students found'}
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -1037,7 +1103,7 @@ export default function ClassroomDetailsClient({
         </div>
       </div>
 
-      {/* Attendance Modal */}
+      {/* Attendance Modal (unchanged) */}
       <AnimatePresence>
         {showAttendanceModal && (
           <motion.div

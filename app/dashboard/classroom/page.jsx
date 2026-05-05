@@ -105,6 +105,7 @@ const BatchAccordion = ({
   onDelete,
   onOpenCalendar,
   onOpenRoutine,
+  onOpenBatchReport, // ADDED
   hasUpdatePermission,
   hasDeletePermission,
   studentCount,
@@ -159,12 +160,23 @@ const BatchAccordion = ({
               {totalSessions} Session{totalSessions !== 1 ? 's' : ''}
             </span>
           </div>
+          {/* ADDED: Batch Report Button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenBatchReport(batch.id, batch.name, batch.academicYear);
+            }}
+            className="cursor-pointer px-3 py-1.5 text-xs bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex items-center gap-1.5 transition-colors"
+            title="View Batch Attendance Report"
+          >
+            <Icons.BarChart3 size={14} /> Report
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onOpenCalendar(null, batch.id);
             }}
-            className="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 flex items-center gap-1.5 transition-colors"
+            className="cursor-pointer px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 flex items-center gap-1.5 transition-colors"
             title="Open Batch Calendar"
           >
             <Icons.CalendarDays size={14} /> Batch Calendar
@@ -174,7 +186,7 @@ const BatchAccordion = ({
               e.stopPropagation();
               onOpenRoutine(null, batch.id);
             }}
-            className="px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1.5 transition-colors"
+            className="cursor-pointer px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1.5 transition-colors"
             title="Open Batch Routine"
           >
             <Clock size={14} /> Routine
@@ -373,6 +385,178 @@ const BatchAccordion = ({
   );
 };
 
+// Add this component inside app/classrooms/page.jsx or as a separate file
+
+// Enhanced AttendanceSummaryReport wrapper that fetches semester dates from calendar
+function AttendanceReportWithSemesterDates({
+  onClose,
+  batchId,
+  batchName,
+  academicYear,
+}) {
+  const [semesterDates, setSemesterDates] = useState(null);
+  const [loadingDates, setLoadingDates] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (batchId) {
+      fetchSemesterDates();
+    }
+  }, [batchId]);
+
+  const fetchSemesterDates = async () => {
+    setLoadingDates(true);
+    setError(null);
+
+    try {
+      // Try to fetch calendar events for semester dates
+      const response = await fetch(
+        `/api/batches/${batchId}/events?type=semester`
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+
+        // Use the effective semester dates from the API
+        if (
+          data.effectiveSemesterDates?.startDate ||
+          data.effectiveSemesterDates?.endDate
+        ) {
+          const startDate = data.effectiveSemesterDates.startDate
+            ? new Date(data.effectiveSemesterDates.startDate)
+                .toISOString()
+                .split('T')[0]
+            : '';
+          const endDate = data.effectiveSemesterDates.endDate
+            ? new Date(data.effectiveSemesterDates.endDate)
+                .toISOString()
+                .split('T')[0]
+            : '';
+
+          console.log('Semester dates found:', { startDate, endDate });
+          setSemesterDates({ startDate, endDate });
+          setLoadingDates(false);
+          return;
+        }
+
+        // If specific semester events found, use those
+        if (data.semesterDates?.start || data.semesterDates?.end) {
+          const startDate = data.semesterDates.start?.date
+            ? new Date(data.semesterDates.start.date)
+                .toISOString()
+                .split('T')[0]
+            : '';
+          const endDate = data.semesterDates.end?.date
+            ? new Date(data.semesterDates.end.date).toISOString().split('T')[0]
+            : '';
+
+          console.log('Semester events found:', { startDate, endDate });
+          setSemesterDates({ startDate, endDate });
+          setLoadingDates(false);
+          return;
+        }
+      }
+
+      // Fallback: Try fetching batch directly for dates
+      console.log('No semester events found, trying batch dates...');
+      const batchResponse = await fetch(`/api/batches/${batchId}`);
+
+      if (batchResponse.ok) {
+        const batchData = await batchResponse.json();
+        const batch = batchData.batch || batchData;
+
+        if (batch.startDate || batch.endDate) {
+          const startDate = batch.startDate
+            ? new Date(batch.startDate).toISOString().split('T')[0]
+            : '';
+          const endDate = batch.endDate
+            ? new Date(batch.endDate).toISOString().split('T')[0]
+            : '';
+
+          console.log('Using batch dates:', { startDate, endDate });
+          setSemesterDates({ startDate, endDate });
+          setLoadingDates(false);
+          return;
+        }
+      }
+
+      // Ultimate fallback: Use current academic year
+      console.log('Using default academic year dates');
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const academicStart =
+        now.getMonth() < 6
+          ? `${currentYear - 1}-07-01`
+          : `${currentYear}-07-01`;
+      const academicEnd =
+        now.getMonth() < 6
+          ? `${currentYear}-06-30`
+          : `${currentYear + 1}-06-30`;
+
+      setSemesterDates({
+        startDate: academicStart,
+        endDate: academicEnd,
+      });
+    } catch (error) {
+      console.error('Error fetching semester dates:', error);
+      setError(error.message);
+
+      // Default fallback
+      const now = new Date();
+      setSemesterDates({
+        startDate: new Date(now.getFullYear(), 0, 1)
+          .toISOString()
+          .split('T')[0],
+        endDate: new Date(now.getFullYear(), 11, 31)
+          .toISOString()
+          .split('T')[0],
+      });
+    } finally {
+      setLoadingDates(false);
+    }
+  };
+
+  if (loadingDates) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+      >
+        <motion.div
+          initial={{ scale: 0.9 }}
+          animate={{ scale: 1 }}
+          className="bg-white rounded-2xl p-8 text-center shadow-xl"
+        >
+          <Icons.Loader2
+            size={48}
+            className="animate-spin text-indigo-600 mx-auto mb-4"
+          />
+          <p className="text-gray-600 font-medium">Loading semester dates...</p>
+          <p className="text-sm text-gray-400 mt-1">
+            {batchName || 'Fetching batch calendar'}
+          </p>
+        </motion.div>
+      </motion.div>
+    );
+  }
+
+  if (error) {
+    console.warn('Using fallback dates due to error:', error);
+  }
+
+  return (
+    <AttendanceSummaryReport
+      onClose={onClose}
+      preSelectedBatch={batchId ? String(batchId) : ''}
+      preSelectedStartDate={semesterDates?.startDate || ''}
+      preSelectedEndDate={semesterDates?.endDate || ''}
+      batchName={batchName}
+    />
+  );
+}
+
 export default function ClassroomPage() {
   const { can, isLoading: permissionsLoading } = usePermissions();
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -382,6 +566,13 @@ export default function ClassroomPage() {
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showAttendanceReport, setShowAttendanceReport] = useState(false);
+  // ADDED: Batch-specific report state
+  const [showBatchReport, setShowBatchReport] = useState(false);
+  const [batchReportData, setBatchReportData] = useState({
+    batchId: null,
+    batchName: '',
+    academicYear: '',
+  });
   const [showAcademicCalendar, setShowAcademicCalendar] = useState(false);
   const [calendarClassroomId, setCalendarClassroomId] = useState(null);
   const [calendarBatchId, setCalendarBatchId] = useState(null);
@@ -420,6 +611,16 @@ export default function ClassroomPage() {
     setCalendarClassroomId(classroomId);
     setCalendarBatchId(batchId);
     setShowAcademicCalendar(true);
+  };
+
+  // ADDED: Handle opening batch report
+  const handleOpenBatchReport = (batchId, batchName, academicYear) => {
+    setBatchReportData({
+      batchId,
+      batchName: batchName || 'Unknown Batch',
+      academicYear: academicYear || 'N/A',
+    });
+    setShowBatchReport(true);
   };
 
   const fetchClassrooms = useCallback(async () => {
@@ -848,7 +1049,7 @@ export default function ClassroomPage() {
                   onClick={() => setShowAttendanceReport(true)}
                   className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
                 >
-                  <Icons.BarChart3 size={18} /> Report
+                  <Icons.BarChart3 size={18} /> Global Report
                 </button>
                 {hasCreatePermission && (
                   <button
@@ -993,6 +1194,7 @@ export default function ClassroomPage() {
                 onDelete={openDeleteModal}
                 onOpenCalendar={handleOpenCalendar}
                 onOpenRoutine={handleOpenRoutine}
+                onOpenBatchReport={handleOpenBatchReport} // ADDED
                 hasUpdatePermission={hasUpdatePermission}
                 hasDeletePermission={hasDeletePermission}
                 studentCount={getBatchStudentCount(batchKey, data.batch.id)}
@@ -1013,10 +1215,30 @@ export default function ClassroomPage() {
         loading={formLoading}
       />
 
+      {/* Global Attendance Report (no pre-selected batch) */}
       <AnimatePresence>
         {showAttendanceReport && (
           <AttendanceSummaryReport
             onClose={() => setShowAttendanceReport(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Batch-Specific Attendance Report with Semester Dates */}
+      <AnimatePresence>
+        {showBatchReport && batchReportData.batchId && (
+          <AttendanceReportWithSemesterDates
+            onClose={() => {
+              setShowBatchReport(false);
+              setBatchReportData({
+                batchId: null,
+                batchName: '',
+                academicYear: '',
+              });
+            }}
+            batchId={batchReportData.batchId}
+            batchName={batchReportData.batchName}
+            academicYear={batchReportData.academicYear}
           />
         )}
       </AnimatePresence>

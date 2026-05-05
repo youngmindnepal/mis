@@ -1,9 +1,196 @@
 // components/classroom/ClassroomFormModal.jsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
+
+// Custom Searchable Dropdown Component
+function SearchableSelect({
+  value,
+  onChange,
+  options,
+  placeholder,
+  label,
+  error,
+  disabled,
+  searchPlaceholder,
+  required,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const dropdownRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  // Filter options based on search
+  const filteredOptions = useMemo(() => {
+    if (!search.trim()) return options;
+    const query = search.toLowerCase();
+    return options.filter(
+      (opt) =>
+        opt.label.toLowerCase().includes(query) ||
+        (opt.subLabel && opt.subLabel.toLowerCase().includes(query))
+    );
+  }, [options, search]);
+
+  // Find selected option label
+  const selectedOption = options.find((opt) => opt.value === value);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearch('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (isOpen && searchInputRef.current) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 100);
+    }
+  }, [isOpen]);
+
+  const handleSelect = (optionValue) => {
+    onChange(optionValue);
+    setIsOpen(false);
+    setSearch('');
+  };
+
+  const handleToggle = () => {
+    if (!disabled) {
+      setIsOpen(!isOpen);
+      if (!isOpen) {
+        setSearch('');
+      }
+    }
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {label && (
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          {label} {required && '*'}
+        </label>
+      )}
+
+      {/* Trigger Button */}
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={disabled}
+        className={`w-full px-4 py-2 border rounded-lg text-left focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors ${
+          error ? 'border-red-500' : 'border-gray-300'
+        } ${
+          disabled
+            ? 'bg-gray-100 cursor-not-allowed'
+            : 'bg-white hover:border-gray-400'
+        }`}
+      >
+        <div className="flex items-center justify-between">
+          <span className={selectedOption ? 'text-gray-900' : 'text-gray-400'}>
+            {selectedOption ? selectedOption.label : placeholder}
+          </span>
+          <Icons.ChevronDown
+            size={18}
+            className={`text-gray-400 transition-transform ${
+              isOpen ? 'rotate-180' : ''
+            }`}
+          />
+        </div>
+      </button>
+
+      {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
+
+      {/* Dropdown Panel */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.15 }}
+            className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-hidden"
+          >
+            {/* Search Input */}
+            <div className="sticky top-0 bg-white border-b border-gray-100 p-2">
+              <div className="relative">
+                <Icons.Search
+                  size={16}
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={searchPlaceholder || 'Search...'}
+                  className="w-full pl-9 pr-8 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  onClick={(e) => e.stopPropagation()}
+                />
+                {search && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSearch('');
+                    }}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <Icons.X size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Options List */}
+            <div className="overflow-y-auto max-h-48">
+              {filteredOptions.length > 0 ? (
+                filteredOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleSelect(option.value)}
+                    className={`w-full px-4 py-2.5 text-left hover:bg-indigo-50 transition-colors flex items-center justify-between ${
+                      option.value === value
+                        ? 'bg-indigo-50 text-indigo-700 font-medium'
+                        : 'text-gray-700'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm">{option.label}</span>
+                      {option.subLabel && (
+                        <span className="text-xs text-gray-400 ml-2">
+                          {option.subLabel}
+                        </span>
+                      )}
+                    </div>
+                    {option.value === value && (
+                      <Icons.Check
+                        size={16}
+                        className="text-indigo-600 flex-shrink-0 ml-2"
+                      />
+                    )}
+                  </button>
+                ))
+              ) : (
+                <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                  No results found
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 export default function ClassroomFormModal({
   isOpen,
@@ -51,10 +238,12 @@ export default function ClassroomFormModal({
           ? new Date(initialData.endDate).toISOString().split('T')[0]
           : '',
         capacity: initialData.capacity || '',
-        courseId: initialData.courseId || '',
-        facultyId: initialData.facultyId || '',
-        batchId: initialData.batchId || '',
-        departmentId: initialData.departmentId || '',
+        courseId: initialData.courseId ? String(initialData.courseId) : '',
+        facultyId: initialData.facultyId ? String(initialData.facultyId) : '',
+        batchId: initialData.batchId ? String(initialData.batchId) : '',
+        departmentId: initialData.departmentId
+          ? String(initialData.departmentId)
+          : '',
       });
     } else {
       setFormData({
@@ -119,6 +308,62 @@ export default function ClassroomFormModal({
     }
   };
 
+  // Format options for SearchableSelect with SORTING
+  const courseOptions = useMemo(
+    () =>
+      courses
+        .map((course) => ({
+          value: String(course.id),
+          label: course.name,
+          subLabel: course.code || '',
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)), // Sort courses alphabetically
+    [courses]
+  );
+
+  const facultyOptions = useMemo(
+    () =>
+      faculties
+        .map((faculty) => ({
+          value: String(faculty.id),
+          label: faculty.name,
+          subLabel: faculty.designation || faculty.department?.name || '',
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)), // Sort faculty alphabetically
+    [faculties]
+  );
+
+  const batchOptions = useMemo(
+    () =>
+      batches
+        .map((batch) => ({
+          value: String(batch.id),
+          label: batch.name,
+          subLabel: batch.academicYear || '',
+        }))
+        .sort((a, b) => {
+          // Sort by academic year (descending) then by name
+          const yearCompare = (b.subLabel || '').localeCompare(
+            a.subLabel || ''
+          );
+          if (yearCompare !== 0) return yearCompare;
+          return a.label.localeCompare(b.label);
+        }),
+    [batches]
+  );
+
+  const departmentOptions = useMemo(
+    () =>
+      departments
+        .map((dept) => ({
+          value: String(dept.id),
+          label: dept.name,
+          subLabel: dept.code || '',
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)), // Sort departments alphabetically
+    [departments]
+  );
+
   const validateForm = () => {
     const newErrors = {};
 
@@ -134,7 +379,6 @@ export default function ClassroomFormModal({
     return Object.keys(newErrors).length === 0;
   };
 
-  // In ClassroomFormModal.jsx, update the handleSubmit function:
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -144,7 +388,6 @@ export default function ClassroomFormModal({
     try {
       const submitData = new FormData();
 
-      // If editing, include the ID
       if (initialData && initialData.id) {
         submitData.append('id', initialData.id);
       }
@@ -166,6 +409,7 @@ export default function ClassroomFormModal({
       setSubmitting(false);
     }
   };
+
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) {
@@ -192,7 +436,7 @@ export default function ClassroomFormModal({
             className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
               <h2 className="text-xl font-bold text-gray-800">
                 {initialData ? 'Edit Classroom' : 'Add New Classroom'}
               </h2>
@@ -207,6 +451,7 @@ export default function ClassroomFormModal({
 
             <form onSubmit={handleSubmit} className="p-6 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Classroom Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Classroom Name *
@@ -226,6 +471,7 @@ export default function ClassroomFormModal({
                   )}
                 </div>
 
+                {/* Capacity */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Capacity
@@ -241,92 +487,61 @@ export default function ClassroomFormModal({
                   />
                 </div>
 
+                {/* Course - Searchable & Sorted */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Course *
-                  </label>
-                  <select
+                  <SearchableSelect
                     value={formData.courseId}
-                    onChange={(e) => handleChange('courseId', e.target.value)}
-                    className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                      errors.courseId ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                    onChange={(value) => handleChange('courseId', value)}
+                    options={courseOptions}
+                    placeholder="Select Course"
+                    label="Course"
+                    required
+                    error={errors.courseId}
                     disabled={submitting}
-                  >
-                    <option value="">Select Course</option>
-                    {courses.map((course) => (
-                      <option key={course.id} value={course.id}>
-                        {course.name} ({course.code})
-                      </option>
-                    ))}
-                  </select>
-                  {errors.courseId && (
-                    <p className="mt-1 text-sm text-red-600">
-                      {errors.courseId}
-                    </p>
-                  )}
+                    searchPlaceholder="Search courses..."
+                  />
                 </div>
 
+                {/* Faculty - Searchable & Sorted */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Faculty
-                  </label>
-                  <select
+                  <SearchableSelect
                     value={formData.facultyId}
-                    onChange={(e) => handleChange('facultyId', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(value) => handleChange('facultyId', value)}
+                    options={facultyOptions}
+                    placeholder="Select Faculty"
+                    label="Faculty"
                     disabled={submitting}
-                  >
-                    <option value="">Select Faculty</option>
-                    {faculties.map((faculty) => (
-                      <option key={faculty.id} value={faculty.id}>
-                        {faculty.name}{' '}
-                        {faculty.designation ? `- ${faculty.designation}` : ''}
-                      </option>
-                    ))}
-                  </select>
+                    searchPlaceholder="Search faculty..."
+                  />
                 </div>
 
+                {/* Batch - Searchable & Sorted */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Batch
-                  </label>
-                  <select
+                  <SearchableSelect
                     value={formData.batchId}
-                    onChange={(e) => handleChange('batchId', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(value) => handleChange('batchId', value)}
+                    options={batchOptions}
+                    placeholder="Select Batch"
+                    label="Batch"
                     disabled={submitting}
-                  >
-                    <option value="">Select Batch</option>
-                    {batches.map((batch) => (
-                      <option key={batch.id} value={batch.id}>
-                        {batch.name} ({batch.academicYear})
-                      </option>
-                    ))}
-                  </select>
+                    searchPlaceholder="Search batches..."
+                  />
                 </div>
 
+                {/* Department - Searchable & Sorted */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Department
-                  </label>
-                  <select
+                  <SearchableSelect
                     value={formData.departmentId}
-                    onChange={(e) =>
-                      handleChange('departmentId', e.target.value)
-                    }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(value) => handleChange('departmentId', value)}
+                    options={departmentOptions}
+                    placeholder="Select Department"
+                    label="Department"
                     disabled={submitting}
-                  >
-                    <option value="">Select Department</option>
-                    {departments.map((dept) => (
-                      <option key={dept.id} value={dept.id}>
-                        {dept.name}
-                      </option>
-                    ))}
-                  </select>
+                    searchPlaceholder="Search departments..."
+                  />
                 </div>
 
+                {/* Start Date */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Start Date
@@ -340,6 +555,7 @@ export default function ClassroomFormModal({
                   />
                 </div>
 
+                {/* End Date */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     End Date
@@ -354,6 +570,7 @@ export default function ClassroomFormModal({
                 </div>
               </div>
 
+              {/* Form Actions */}
               <div className="pt-4 border-t flex gap-3">
                 <button
                   type="button"

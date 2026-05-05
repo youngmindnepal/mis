@@ -19,8 +19,9 @@ export async function GET(request) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const activeOnly = searchParams.get('activeOnly') === 'true';
+    const search = searchParams.get('search') || ''; // ADD SEARCH PARAMETER
 
-    console.log('Params:', { batchId, startDate, endDate, activeOnly });
+    console.log('Params:', { batchId, startDate, endDate, activeOnly, search });
 
     if (!batchId) {
       return NextResponse.json(
@@ -34,6 +35,26 @@ export async function GET(request) {
       where: { id: parseInt(batchId) },
       include: {
         students: {
+          where: {
+            // ADD SEARCH FILTER AT DATABASE LEVEL
+            AND: [
+              activeOnly ? { status: 'active' } : {},
+              search
+                ? {
+                    OR: [
+                      { name: { contains: search, mode: 'insensitive' } },
+                      {
+                        rollNo: { contains: search, mode: 'insensitive' },
+                      },
+                      {
+                        enrollmentNo: { contains: search, mode: 'insensitive' },
+                      },
+                      { email: { contains: search, mode: 'insensitive' } },
+                    ],
+                  }
+                : {},
+            ],
+          },
           orderBy: {
             name: 'asc',
           },
@@ -54,10 +75,8 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Batch not found' }, { status: 404 });
     }
 
-    // Filter students if activeOnly is true
-    const filteredStudents = activeOnly
-      ? batch.students.filter((s) => s.status === 'active')
-      : batch.students;
+    // Use the already filtered students from the query
+    const filteredStudents = batch.students;
 
     console.log(
       'Batch found:',
@@ -66,9 +85,7 @@ export async function GET(request) {
       batch.classrooms.length,
       'classrooms and',
       filteredStudents.length,
-      'students (filtered from',
-      batch.students.length,
-      'total)'
+      'students'
     );
 
     // Parse dates
@@ -304,6 +321,13 @@ export async function GET(request) {
         startDate: startDateTime.toISOString().split('T')[0],
         endDate: endDateTime.toISOString().split('T')[0],
       },
+      // ADD SEARCH INFO TO RESPONSE
+      appliedFilter: search
+        ? {
+            search,
+            activeOnly,
+          }
+        : null,
     };
 
     return NextResponse.json(responseData);
