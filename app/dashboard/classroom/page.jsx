@@ -11,6 +11,68 @@ import AcademicCalendar3D from '@/components/classroom/AcademicCalendar3D';
 import RoutineManager3D from '@/components/classroom/RoutineManager3D';
 import { Calendar, Clock, Library } from 'lucide-react';
 import ELibrarySearch from '@/components/library/ELibrarySearch';
+
+// Custom Confirmation Modal Component
+function ConfirmModal({ isOpen, onClose, onConfirm, title, message, loading }) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-center mb-4">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center">
+                <Icons.AlertTriangle size={32} className="text-red-600" />
+              </div>
+            </div>
+            <h3 className="text-xl font-bold text-center text-gray-800 mb-2">
+              {title}
+            </h3>
+            <p className="text-gray-600 text-center mb-6">{message}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                disabled={loading}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                disabled={loading}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Icons.Loader2 size={18} className="animate-spin" />
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <Icons.Trash2 size={18} />
+                    Delete
+                  </>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function LoadingState() {
   return (
     <div className="p-6">
@@ -286,7 +348,9 @@ const BatchAccordion = ({
                               )}
                               {hasDeletePermission && (
                                 <button
-                                  onClick={() => onDelete(classroom.id)}
+                                  onClick={() =>
+                                    onDelete(classroom.id, classroom.name)
+                                  }
                                   className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
                                   title="Delete"
                                 >
@@ -332,6 +396,15 @@ export default function ClassroomPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [expandAll, setExpandAll] = useState(false);
   const [showELibrary, setShowELibrary] = useState(false);
+
+  // Delete confirmation state
+  const [deleteModal, setDeleteModal] = useState({
+    isOpen: false,
+    classroomId: null,
+    classroomName: '',
+  });
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const hasReadPermission = can('classroom', 'read');
   const hasCreatePermission = can('classroom', 'create');
   const hasUpdatePermission = can('classroom', 'update');
@@ -458,45 +531,153 @@ export default function ClassroomPage() {
     setExpandedBatches(newExpanded);
   };
 
-  const handleCreateClassroom = async (formData) => {
-    if (!hasCreatePermission) {
-      showMessage("You don't have permission to create classrooms", 'error');
+  // Open delete confirmation modal
+  const openDeleteModal = (classroomId, classroomName) => {
+    if (!hasDeletePermission) {
+      showMessage("You don't have permission to delete classrooms", 'error');
       return;
     }
-    try {
-      setFormLoading(true);
-      const response = await fetch('/api/classrooms', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!response.ok) {
-        let em = 'Failed';
-        try {
-          em = (await response.json()).error || em;
-        } catch (e) {}
-        throw new Error(em);
-      }
-      showMessage('Classroom created!', 'success');
-      setIsFormModalOpen(false);
-      handleRefresh();
-    } catch (err) {
-      showMessage(err.message, 'error');
-    } finally {
-      setFormLoading(false);
+    setDeleteModal({
+      isOpen: true,
+      classroomId,
+      classroomName,
+    });
+  };
+
+  // Close delete confirmation modal
+  const closeDeleteModal = () => {
+    if (!isDeleting) {
+      setDeleteModal({ isOpen: false, classroomId: null, classroomName: '' });
     }
   };
 
-  const handleDeleteClassroom = async (classroomId) => {
-    if (!confirm('Delete this classroom?')) return;
+  // Confirm and execute delete
+  const confirmDelete = async () => {
+    if (!deleteModal.classroomId) return;
+
+    setIsDeleting(true);
     try {
-      const response = await fetch(`/api/classrooms/${classroomId}`, {
+      const url = `/api/classrooms/${deleteModal.classroomId}`;
+      const response = await fetch(url, {
         method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
-      if (!response.ok) throw new Error('Failed to delete');
-      showMessage('Classroom deleted!', 'success');
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to delete classroom';
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage =
+              errorData?.error || errorData?.message || errorMessage;
+          } else {
+            errorMessage = `Server error: ${response.status} ${response.statusText}`;
+          }
+        } catch (e) {
+          console.error('Error parsing error response:', e);
+        }
+        throw new Error(errorMessage);
+      }
+
+      let result = null;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          result = await response.json();
+        }
+      } catch (e) {
+        console.error('Error parsing success response:', e);
+      }
+
+      showMessage(
+        result?.message ||
+          `Classroom "${deleteModal.classroomName}" deleted successfully!`,
+        'success'
+      );
+
+      setDeleteModal({ isOpen: false, classroomId: null, classroomName: '' });
       handleRefresh();
     } catch (err) {
-      showMessage(err.message, 'error');
+      console.error('Error deleting classroom:', err);
+      showMessage(err.message || 'An unexpected error occurred', 'error');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleCreateClassroom = async (formData) => {
+    if (editingClassroom && !hasUpdatePermission) {
+      showMessage("You don't have permission to update classrooms", 'error');
+      return;
+    }
+    if (!editingClassroom && !hasCreatePermission) {
+      showMessage("You don't have permission to create classrooms", 'error');
+      return;
+    }
+
+    try {
+      setFormLoading(true);
+
+      const url = editingClassroom
+        ? `/api/classrooms/${editingClassroom.id}`
+        : '/api/classrooms';
+
+      const method = editingClassroom ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
+        method: method,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        let errorMessage = editingClassroom
+          ? 'Failed to update classroom'
+          : 'Failed to create classroom';
+
+        try {
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const errorData = await response.json();
+            errorMessage =
+              errorData?.error || errorData?.message || errorMessage;
+          } else {
+            errorMessage = `Server error: ${response.status} ${response.statusText}`;
+          }
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+        throw new Error(errorMessage);
+      }
+
+      let result;
+      try {
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          result = await response.json();
+        }
+      } catch (parseError) {
+        console.error('Error parsing success response:', parseError);
+      }
+
+      showMessage(
+        result?.message ||
+          (editingClassroom
+            ? 'Classroom updated successfully!'
+            : 'Classroom created successfully!'),
+        'success'
+      );
+
+      setIsFormModalOpen(false);
+      setEditingClassroom(null);
+      handleRefresh();
+    } catch (err) {
+      console.error('Error saving classroom:', err);
+      showMessage(err.message || 'An unexpected error occurred', 'error');
+    } finally {
+      setFormLoading(false);
     }
   };
 
@@ -572,6 +753,7 @@ export default function ClassroomPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Success/Error Messages */}
       <AnimatePresence>
         {successMessage && (
           <motion.div
@@ -609,6 +791,16 @@ export default function ClassroomPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={closeDeleteModal}
+        onConfirm={confirmDelete}
+        title="Delete Classroom"
+        message={`Are you sure you want to delete "${deleteModal.classroomName}"? This action cannot be undone and will remove all associated data including enrollments, attendance records, and sessions.`}
+        loading={isDeleting}
+      />
 
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -798,7 +990,7 @@ export default function ClassroomPage() {
                   setEditingClassroom(classroom);
                   setIsFormModalOpen(true);
                 }}
-                onDelete={handleDeleteClassroom}
+                onDelete={openDeleteModal}
                 onOpenCalendar={handleOpenCalendar}
                 onOpenRoutine={handleOpenRoutine}
                 hasUpdatePermission={hasUpdatePermission}
