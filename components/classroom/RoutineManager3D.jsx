@@ -22,6 +22,7 @@ import {
   Home,
   ChevronRight,
   Coffee,
+  ChevronDown,
 } from 'lucide-react';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -73,22 +74,14 @@ const STATUS_STYLES = {
     printBg: '#dbeafe',
   },
 };
+
 const STATUS_LABELS = {
   active: 'Active',
   cancelled: 'Cancelled',
   makeup: 'Makeup',
   break: 'Break',
 };
-const SEMESTER_MAP = {
-  semester1: '1st Semester',
-  semester2: '2nd Semester',
-  semester3: '3rd Semester',
-  semester4: '4th Semester',
-  semester5: '5th Semester',
-  semester6: '6th Semester',
-  semester7: '7th Semester',
-  semester8: '8th Semester',
-};
+
 const CONFLICT_TYPES = {
   faculty: {
     label: 'Faculty Conflict',
@@ -119,6 +112,262 @@ const CONFLICT_TYPES = {
   },
 };
 
+// ==================== COURSE COLOR PALETTE ====================
+const COURSE_COLORS = [
+  {
+    bg: 'bg-blue-100',
+    text: 'text-blue-800',
+    border: 'border-blue-300',
+    printBg: '#dbeafe',
+    printText: '#1e40af',
+  },
+  {
+    bg: 'bg-emerald-100',
+    text: 'text-emerald-800',
+    border: 'border-emerald-300',
+    printBg: '#d1fae5',
+    printText: '#065f46',
+  },
+  {
+    bg: 'bg-purple-100',
+    text: 'text-purple-800',
+    border: 'border-purple-300',
+    printBg: '#ede9fe',
+    printText: '#5b21b6',
+  },
+  {
+    bg: 'bg-amber-100',
+    text: 'text-amber-800',
+    border: 'border-amber-300',
+    printBg: '#fef3c7',
+    printText: '#92400e',
+  },
+  {
+    bg: 'bg-rose-100',
+    text: 'text-rose-800',
+    border: 'border-rose-300',
+    printBg: '#ffe4e6',
+    printText: '#9f1239',
+  },
+  {
+    bg: 'bg-cyan-100',
+    text: 'text-cyan-800',
+    border: 'border-cyan-300',
+    printBg: '#cffafe',
+    printText: '#155e75',
+  },
+  {
+    bg: 'bg-orange-100',
+    text: 'text-orange-800',
+    border: 'border-orange-300',
+    printBg: '#ffedd5',
+    printText: '#9a3412',
+  },
+  {
+    bg: 'bg-teal-100',
+    text: 'text-teal-800',
+    border: 'border-teal-300',
+    printBg: '#ccfbf1',
+    printText: '#115e59',
+  },
+  {
+    bg: 'bg-pink-100',
+    text: 'text-pink-800',
+    border: 'border-pink-300',
+    printBg: '#fce7f3',
+    printText: '#9d174d',
+  },
+  {
+    bg: 'bg-lime-100',
+    text: 'text-lime-800',
+    border: 'border-lime-300',
+    printBg: '#ecfccb',
+    printText: '#3f6212',
+  },
+  {
+    bg: 'bg-indigo-100',
+    text: 'text-indigo-800',
+    border: 'border-indigo-300',
+    printBg: '#e0e7ff',
+    printText: '#3730a3',
+  },
+  {
+    bg: 'bg-fuchsia-100',
+    text: 'text-fuchsia-800',
+    border: 'border-fuchsia-300',
+    printBg: '#fae8ff',
+    printText: '#86198f',
+  },
+  {
+    bg: 'bg-violet-100',
+    text: 'text-violet-800',
+    border: 'border-violet-300',
+    printBg: '#ede9fe',
+    printText: '#5b21b6',
+  },
+  {
+    bg: 'bg-sky-100',
+    text: 'text-sky-800',
+    border: 'border-sky-300',
+    printBg: '#e0f2fe',
+    printText: '#075985',
+  },
+  {
+    bg: 'bg-red-100',
+    text: 'text-red-800',
+    border: 'border-red-300',
+    printBg: '#fee2e2',
+    printText: '#991b1b',
+  },
+  {
+    bg: 'bg-green-100',
+    text: 'text-green-800',
+    border: 'border-green-300',
+    printBg: '#dcfce7',
+    printText: '#166534',
+  },
+];
+
+// Hash function for consistent color assignment
+const getCourseColor = (subject) => {
+  if (!subject) return COURSE_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < subject.length; i++)
+    hash = subject.charCodeAt(i) + ((hash << 5) - hash);
+  return COURSE_COLORS[Math.abs(hash) % COURSE_COLORS.length];
+};
+
+// ==================== SEARCHABLE DROPDOWN ====================
+function SearchableDropdown({
+  value,
+  onChange,
+  options,
+  placeholder,
+  disabled,
+  labelKey = 'name',
+  valueKey = 'id',
+  required,
+  extraKey,
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const ref = useRef(null);
+  const selected = options.find((o) => String(o[valueKey]) === String(value));
+  const filtered = options.filter((o) => {
+    if (!search) return true;
+    const s = search.toLowerCase();
+    return (
+      o[labelKey]?.toLowerCase().includes(s) ||
+      o.email?.toLowerCase().includes(s) ||
+      o.code?.toLowerCase().includes(s) ||
+      o.designation?.toLowerCase().includes(s) ||
+      (extraKey && o[extraKey]?.toLowerCase().includes(s))
+    );
+  });
+  useEffect(() => {
+    const h = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) {
+        setIsOpen(false);
+        setSearch('');
+      }
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => {
+          setIsOpen(!isOpen);
+          setSearch('');
+        }}
+        disabled={disabled}
+        className={`w-full rounded-lg border px-3 py-2 text-sm text-left flex items-center justify-between ${
+          disabled
+            ? 'bg-gray-100 cursor-not-allowed'
+            : 'hover:border-indigo-400'
+        } ${!value && required ? 'border-red-300' : 'border-gray-300'}`}
+      >
+        <span className={selected ? 'text-gray-900 truncate' : 'text-gray-400'}>
+          {selected ? selected[labelKey] : placeholder || 'Select...'}
+        </span>
+        <ChevronDown
+          size={14}
+          className={`text-gray-400 flex-shrink-0 transition-transform ${
+            isOpen ? 'rotate-180' : ''
+          }`}
+        />
+      </button>
+      {isOpen && (
+        <div className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-hidden">
+          <div className="p-2 border-b sticky top-0 bg-white">
+            <div className="relative">
+              <Search
+                className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400"
+                size={14}
+              />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search..."
+                onClick={(e) => e.stopPropagation()}
+                className="pl-8 pr-3 py-1.5 w-full border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-indigo-400"
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="overflow-y-auto max-h-48">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-4 text-center text-xs text-gray-400">
+                No results
+              </div>
+            ) : (
+              filtered.map((o) => (
+                <button
+                  key={o[valueKey]}
+                  type="button"
+                  onClick={() => {
+                    onChange(String(o[valueKey]));
+                    setIsOpen(false);
+                    setSearch('');
+                  }}
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-colors ${
+                    String(o[valueKey]) === String(value)
+                      ? 'bg-indigo-100 font-medium'
+                      : ''
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="truncate">{o[labelKey]}</span>
+                    {o.designation && (
+                      <span className="text-xs text-gray-400 flex-shrink-0">
+                        ({o.designation})
+                      </span>
+                    )}
+                    {o.code && (
+                      <span className="text-xs text-gray-400 flex-shrink-0">
+                        - {o.code}
+                      </span>
+                    )}
+                    {o.email && (
+                      <span className="text-xs text-gray-400 ml-auto truncate max-w-[100px]">
+                        {o.email}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==================== MAIN COMPONENT ====================
 export default function RoutineManager3D({
   classroomId,
   batchId,
@@ -132,10 +381,8 @@ export default function RoutineManager3D({
   const [classrooms, setClassrooms] = useState([]);
   const [filteredClassrooms, setFilteredClassrooms] = useState([]);
   const [selectedBatch, setSelectedBatch] = useState(null);
-  const [batchSemester, setBatchSemester] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const printRef = useRef(null);
   const [viewMode, setViewMode] = useState('multipleBatches');
   const [selectedFaculty, setSelectedFaculty] = useState(null);
   const [facultySearch, setFacultySearch] = useState('');
@@ -163,12 +410,16 @@ export default function RoutineManager3D({
     notes: '',
   });
 
-  const getSemesterDisplay = (s) => SEMESTER_MAP[s] || s || '';
   const roomDisplay = (r) =>
     [r?.classroom?.name, r?.roomNumber ? `(Rm ${r.roomNumber})` : '']
       .filter(Boolean)
       .join(' ') || '-';
   const isBatchView = !!(batchId || classroomId);
+  const printDate = new Date().toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
 
   const routinesByBatch = useMemo(() => {
     const g = {};
@@ -185,6 +436,30 @@ export default function RoutineManager3D({
       (a.batch?.name || '').localeCompare(b.batch?.name || '')
     );
   }, [allActiveRoutines]);
+  const facultyRoutines = useMemo(
+    () =>
+      selectedFaculty
+        ? allActiveRoutines.filter(
+            (r) => r.facultyId === parseInt(selectedFaculty)
+          )
+        : [],
+    [allActiveRoutines, selectedFaculty]
+  );
+  const facultyInfo = useMemo(
+    () => faculties.find((f) => f.id === parseInt(selectedFaculty)),
+    [faculties, selectedFaculty]
+  );
+  const filteredFacultyList = useMemo(() => {
+    const t = facultySearch.toLowerCase();
+    return t
+      ? faculties.filter(
+          (f) =>
+            f.name?.toLowerCase().includes(t) ||
+            f.email?.toLowerCase().includes(t) ||
+            f.designation?.toLowerCase().includes(t)
+        )
+      : faculties;
+  }, [faculties, facultySearch]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -200,79 +475,43 @@ export default function RoutineManager3D({
           : Promise.resolve({ ok: true, json: () => ({ routines: [] }) }),
         fetch('/api/routines?limit=10000'),
       ]);
-      if (bRes.ok) {
-        const d = await bRes.json();
-        setRoutines(d.routines || []);
-        for (const r of d.routines || []) {
-          if (r.classroom?.course?.semester) {
-            setBatchSemester(r.classroom.course.semester);
-            break;
-          }
-        }
-      }
-      if (aRes.ok) {
-        const d = await aRes.json();
-        setAllActiveRoutines(d.routines || []);
-      }
-      let f = [];
+      if (bRes.ok) setRoutines((await bRes.json()).routines || []);
+      if (aRes.ok) setAllActiveRoutines((await aRes.json()).routines || []);
       try {
         const r = await fetch('/api/faculty?limit=1000');
-        if (r.ok)
-          f = (await r.json()).faculty || (await r.json()).faculties || [];
-      } catch {
-        try {
-          const r = await fetch('/api/faculties?limit=1000');
-          if (r.ok) f = (await r.json()).faculties || [];
-        } catch {}
-      }
-      setFaculties(
-        (Array.isArray(f) ? f : []).sort((a, b) =>
-          (a.name || '').localeCompare(b.name || '')
-        )
-      );
+        if (r.ok) {
+          const d = await r.json();
+          setFaculties(
+            (d.faculty || d.faculties || []).sort((a, b) =>
+              (a.name || '').localeCompare(b.name || '')
+            )
+          );
+        }
+      } catch {}
       try {
         const r = await fetch('/api/batches?limit=100');
         if (r.ok) {
-          const l = (await r.json()).batches || [];
-          setBatches(Array.isArray(l) ? l : []);
+          const bl = (await r.json()).batches || [];
+          setBatches(Array.isArray(bl) ? bl : []);
           if (batchId) {
-            const x = l.find((b) => b.id === parseInt(batchId));
-            if (x) setSelectedBatch(x);
+            const f = bl.find((b) => b.id === parseInt(batchId));
+            if (f) setSelectedBatch(f);
           }
         }
       } catch {}
       try {
-        let u = '/api/classrooms?include=course&limit=200';
+        let u = '/api/classrooms?limit=200';
         if (batchId) u += `&batchId=${batchId}`;
         const r = await fetch(u);
         if (r.ok) {
-          const l = (await r.json()).classrooms || [];
-          const a = Array.isArray(l) ? l : [];
-          const fl = batchId
-            ? a.filter((c) => c.batchId === parseInt(batchId))
-            : a;
+          const a = (await r.json()).classrooms || [];
           setClassrooms(a);
-          setFilteredClassrooms(fl.length > 0 ? fl : a);
-          if (classroomId) {
-            const x = a.find((c) => c.id === parseInt(classroomId));
-            if (x?.course?.semester) setBatchSemester(x.course.semester);
-          }
+          setFilteredClassrooms(
+            batchId ? a.filter((c) => c.batchId === parseInt(batchId)) : a
+          );
         }
       } catch {}
-      if (!batchSemester && batchId) {
-        try {
-          const r = await fetch(
-            `/api/course-lists?batchId=${batchId}&isActive=true`
-          );
-          if (r.ok) {
-            const l = (await r.json()).courseLists || [];
-            if (l.length > 0 && l[0].semester) setBatchSemester(l[0].semester);
-          }
-        } catch {}
-      }
     } catch {
-      setErrorMsg('Failed to load');
-      setTimeout(() => setErrorMsg(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -296,52 +535,26 @@ export default function RoutineManager3D({
   const isMergeSelected = (d, s) =>
     mergeSelections.some((x) => x.day === d && x.slotId === s);
 
-  const selectedFacultyRoutines = useMemo(
-    () =>
-      selectedFaculty
-        ? allActiveRoutines.filter(
-            (r) => r.facultyId === parseInt(selectedFaculty)
-          )
-        : [],
-    [allActiveRoutines, selectedFaculty]
-  );
-  const selectedFacultyInfo = useMemo(
-    () => faculties.find((f) => f.id === parseInt(selectedFaculty)),
-    [faculties, selectedFaculty]
-  );
-  const filteredFaculties = useMemo(() => {
-    const t = facultySearch.toLowerCase();
-    return t
-      ? faculties.filter(
-          (f) =>
-            f.name?.toLowerCase().includes(t) ||
-            (f.email && f.email.toLowerCase().includes(t)) ||
-            (f.designation && f.designation.toLowerCase().includes(t))
-        )
-      : faculties;
-  }, [faculties, facultySearch]);
-
-  const checkAllConflicts = (fid, cid, roomNum, d, ss, se, ex = null) => {
+  const checkConflicts = (fid, cid, rn, d, ss, se, ex = null) => {
     const c = [],
-      ch = allActiveRoutines.filter((r) => r.status !== 'break');
+      all = allActiveRoutines.filter((r) => r.status !== 'break');
     for (let s = ss; s <= se; s++)
-      ch.forEach((r) => {
+      all.forEach((r) => {
         if (r.id === ex) return;
         const re = r.timeSlotEnd ?? r.timeSlot;
         if (r.day !== d || r.timeSlot > s || re < s) return;
         if (
           fid &&
-          r.facultyId &&
           r.facultyId === parseInt(fid) &&
           !c.find((x) => x.routine.id === r.id && x.type === 'faculty')
         )
           c.push({
             type: 'faculty',
             routine: r,
-            message: `${r.faculty?.name || 'Faculty'} already assigned`,
+            message: `${r.faculty?.name || 'Faculty'} busy`,
             detail: `${DAYS[d]} • ${TIME_SLOTS[s]?.display}`,
             subject: r.subject || 'N/A',
-            room: r.classroom?.name || r.roomNumber || 'N/A',
+            room: roomDisplay(r),
             batch: r.batch?.name || 'N/A',
           });
         if (
@@ -352,59 +565,57 @@ export default function RoutineManager3D({
           c.push({
             type: 'room',
             routine: r,
-            message: `${r.classroom?.name || 'Room'} already occupied`,
+            message: `${r.classroom?.name || 'Room'} occupied`,
             detail: `${DAYS[d]} • ${TIME_SLOTS[s]?.display}`,
             subject: r.subject || 'N/A',
             faculty: r.faculty?.name || 'N/A',
             batch: r.batch?.name || 'N/A',
           });
         if (
-          roomNum &&
-          roomNum.trim() !== '' &&
+          rn &&
+          rn.trim() &&
           r.roomNumber &&
-          r.roomNumber.trim().toLowerCase() === roomNum.trim().toLowerCase() &&
+          r.roomNumber.trim().toLowerCase() === rn.trim().toLowerCase() &&
           (!cid || r.classroomId !== parseInt(cid)) &&
           !c.find((x) => x.routine.id === r.id && x.type === 'roomNumber')
         )
           c.push({
             type: 'roomNumber',
             routine: r,
-            message: `Room Number "${roomNum}" in use`,
+            message: `Room "${rn}" in use`,
             detail: `${DAYS[d]} • ${TIME_SLOTS[s]?.display}`,
             subject: r.subject || 'N/A',
             faculty: r.faculty?.name || 'N/A',
-            room: `${r.classroom?.name || 'N/A'} (Rm ${r.roomNumber})`,
+            room: roomDisplay(r),
             batch: r.batch?.name || 'N/A',
           });
       });
     return c;
   };
 
-  const toggleMergeSlot = (d, s) => {
+  const toggleMerge = (d, s) =>
     setMergeSelections((p) => {
       const e = p.find((x) => x.day === d && x.slotId === s);
       if (e) return p.filter((x) => !(x.day === d && x.slotId === s));
       if (p.length > 0 && p[0].day !== d) return [{ day: d, slotId: s }];
       return [...p, { day: d, slotId: s }];
     });
-  };
-  const handleMergeConfirm = () => {
+  const confirmMerge = () => {
     if (mergeSelections.length < 2) {
       setErrorMsg('Select 2+ slots');
       return;
     }
     const d = mergeSelections[0].day;
     if (!mergeSelections.every((x) => x.day === d)) {
-      setErrorMsg('Same day');
+      setErrorMsg('Same day only');
       return;
     }
     const sl = mergeSelections.map((x) => x.slotId).sort((a, b) => a - b);
-    for (let i = 1; i < sl.length; i++) {
+    for (let i = 1; i < sl.length; i++)
       if (sl[i] !== sl[i - 1] + 1) {
-        setErrorMsg('Consecutive');
+        setErrorMsg('Consecutive only');
         return;
       }
-    }
     setEditingRoutine(null);
     setForm((p) => ({
       ...p,
@@ -420,11 +631,10 @@ export default function RoutineManager3D({
     setMergeSelections([]);
     setShowRoutineModal(true);
   };
-  const handleSelectAllDaySlots = (d) =>
-    setMergeSelections(TIME_SLOTS.map((s) => ({ day: d, slotId: s.id })));
+
   const handleSlotClick = (d, s, arr = displayRoutines) => {
     if (mergeMode) {
-      toggleMergeSlot(d, s);
+      toggleMerge(d, s);
       return;
     }
     const ex = getRoutinesAt(d, s, arr);
@@ -449,7 +659,7 @@ export default function RoutineManager3D({
     }
   };
   const handleEdit = (r, e) => {
-    if (e) e.stopPropagation();
+    e?.stopPropagation();
     setEditingRoutine(r);
     setForm({
       facultyId: r.facultyId?.toString() || '',
@@ -465,7 +675,7 @@ export default function RoutineManager3D({
     });
     setShowRoutineModal(true);
   };
-  const handleDeleteRoutine = async (id) => {
+  const deleteSingle = async (id) => {
     try {
       await fetch(`/api/routines?id=${id}`, { method: 'DELETE' });
       setSuccessMsg('Deleted!');
@@ -474,10 +684,10 @@ export default function RoutineManager3D({
       setDeleteTarget(null);
       fetchData();
     } catch {
-      setErrorMsg('Delete failed');
+      setErrorMsg('Failed');
     }
   };
-  const handleDeleteAllInSlot = async () => {
+  const deleteSlot = async () => {
     if (!deleteTarget) return;
     try {
       for (const r of deleteTarget.routines)
@@ -488,7 +698,7 @@ export default function RoutineManager3D({
       setDeleteTarget(null);
       fetchData();
     } catch {
-      setErrorMsg('Delete failed');
+      setErrorMsg('Failed');
     }
   };
 
@@ -512,7 +722,7 @@ export default function RoutineManager3D({
       return;
     }
     if (!force && form.status === 'active') {
-      const c = checkAllConflicts(
+      const c = checkConflicts(
         form.facultyId,
         form.classroomId,
         form.roomNumber,
@@ -529,7 +739,7 @@ export default function RoutineManager3D({
     }
     setSaving(true);
     try {
-      const payload = {
+      const p = {
         facultyId: form.facultyId ? parseInt(form.facultyId) : undefined,
         batchId: parseInt(form.batchId),
         classroomId: form.classroomId ? parseInt(form.classroomId) : undefined,
@@ -542,17 +752,16 @@ export default function RoutineManager3D({
         status: form.status,
         notes: form.notes || undefined,
       };
-      if (editingRoutine) payload.id = editingRoutine.id;
-      Object.keys(payload).forEach((k) => {
-        if (payload[k] === undefined) delete payload[k];
+      if (editingRoutine) p.id = editingRoutine.id;
+      Object.keys(p).forEach((k) => {
+        if (p[k] === undefined) delete p[k];
       });
       const r = await fetch('/api/routines', {
         method: editingRoutine ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(p),
       });
-      const rd = await r.json();
-      if (!r.ok) throw new Error(rd.error || rd.details || 'Save failed');
+      if (!r.ok) throw new Error((await r.json()).error || 'Save failed');
       setSuccessMsg(editingRoutine ? 'Updated!' : 'Added!');
       setTimeout(() => setSuccessMsg(null), 3000);
       setShowRoutineModal(false);
@@ -567,16 +776,49 @@ export default function RoutineManager3D({
     }
   };
 
-  const toggleBatchSection = (bid) =>
+  const toggleBatch = (bid) =>
     setExpandedBatchSections((p) => ({ ...p, [bid]: !p[bid] }));
+
+  // ==================== RENDER CELL WITH COURSE COLORS ====================
+  const getCellStyle = (dr) => {
+    if (!dr)
+      return { bg: 'bg-white', border: 'border-gray-100', printBg: '#ffffff' };
+    if (dr.status === 'break')
+      return {
+        bg: STATUS_STYLES.break.bg,
+        border: STATUS_STYLES.break.border,
+        printBg: STATUS_STYLES.break.printBg,
+      };
+    const cc = getCourseColor(dr.subject);
+    return {
+      bg:
+        dr.status === 'cancelled'
+          ? `${STATUS_STYLES.cancelled.bg} opacity-60`
+          : dr.status === 'makeup'
+          ? STATUS_STYLES.makeup.bg
+          : cc.bg,
+      border:
+        dr.status === 'cancelled'
+          ? STATUS_STYLES.cancelled.border
+          : dr.status === 'makeup'
+          ? STATUS_STYLES.makeup.border
+          : cc.border,
+      printBg:
+        dr.status === 'cancelled'
+          ? STATUS_STYLES.cancelled.printBg
+          : dr.status === 'makeup'
+          ? STATUS_STYLES.makeup.printBg
+          : cc.printBg,
+    };
+  };
 
   const renderCell = (d, s, list, merged, prefix = '', showAdd = false) => {
     if (merged && merged.timeSlot !== s) return null;
     const dr = merged || list[0],
-      rem = list.length > 1 ? list.length - 1 : 0,
-      cs = dr?.timeSlotEnd ? dr.timeSlotEnd - dr.timeSlot + 1 : 1,
-      sel = isMergeSelected(d, s),
-      st = STATUS_STYLES[dr?.status] || STATUS_STYLES.active;
+      rem = list.length > 1 ? list.length - 1 : 0;
+    const cs = dr?.timeSlotEnd ? dr.timeSlotEnd - dr.timeSlot + 1 : 1;
+    const sel = isMergeSelected(d, s);
+    const style = getCellStyle(dr);
     return (
       <td
         key={prefix + s}
@@ -589,9 +831,7 @@ export default function RoutineManager3D({
         <div className="min-h-[40px] print:min-h-full">
           {dr ? (
             <div
-              className={`text-[8px] p-1 rounded border cursor-pointer h-full print:text-[10px] print:shadow-none print:flex print:flex-col print:items-center print:justify-center print:text-center print:h-full print:border print:border-gray-400 relative group ${
-                st.bg
-              } ${st.border} ${dr.status === 'cancelled' ? 'opacity-60' : ''}`}
+              className={`text-[8px] p-1 rounded border cursor-pointer h-full print:text-[10px] print:shadow-none print:flex print:flex-col print:items-center print:justify-center print:text-center print:h-full print:border print:border-gray-400 relative group ${style.bg} ${style.border}`}
               onClick={(e) => {
                 e.stopPropagation();
                 handleEdit(dr, e);
@@ -606,6 +846,9 @@ export default function RoutineManager3D({
                   </div>
                   <div className="text-gray-600 truncate print:text-[10px] print:font-semibold print:mb-0.5">
                     {dr.subject || ''}
+                  </div>
+                  <div className="text-[7px] text-indigo-500 truncate print:text-[8px] font-medium">
+                    {dr.batch?.name || ''}
                   </div>
                 </>
               )}
@@ -628,7 +871,7 @@ export default function RoutineManager3D({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDeleteRoutine(dr.id);
+                      deleteSingle(dr.id);
                     }}
                     className="p-0.5 bg-red-500 text-white rounded"
                   >
@@ -677,7 +920,12 @@ export default function RoutineManager3D({
                     ? 'bg-yellow-100'
                     : 'bg-gray-50'
                 }`}
-                onClick={() => mergeMode && handleSelectAllDaySlots(di)}
+                onClick={() =>
+                  mergeMode &&
+                  setMergeSelections(
+                    TIME_SLOTS.map((s) => ({ day: di, slotId: s.id }))
+                  )
+                }
               >
                 {day.substring(0, 3)}
               </td>
@@ -693,29 +941,35 @@ export default function RoutineManager3D({
     </div>
   );
 
+  // ==================== PRINT CELL WITH COURSE COLORS ====================
   const renderPrintCell = (dr, cs) => {
-    const st = STATUS_STYLES[dr?.status] || STATUS_STYLES.active;
+    const style = getCellStyle(dr);
     return (
       <td
-        className="border-2 border-black p-1 align-middle text-center"
+        className="border border-black p-0.5 align-middle text-center"
         colSpan={cs}
-        style={{ backgroundColor: dr ? st.printBg : 'transparent' }}
+        style={{ backgroundColor: dr ? style.printBg : 'transparent' }}
       >
         {dr && (
-          <div className="flex flex-col items-center justify-center h-full gap-0.5">
+          <div className="flex flex-col items-center justify-center h-full gap-0">
             {dr.status === 'break' ? (
-              <span className="font-extrabold text-[11px] uppercase text-blue-700">
+              <span className="font-extrabold text-[8px] uppercase text-blue-700 leading-tight">
                 BREAK
               </span>
             ) : (
               <>
-                <div className="font-extrabold text-[11px] uppercase">
+                <div className="font-extrabold text-[7px] uppercase leading-tight truncate max-w-full">
                   {dr.faculty?.name || ''}
                 </div>
-                <div className="font-bold text-[10px]">{dr.subject || ''}</div>
+                <div className="font-bold text-[6px] leading-tight truncate max-w-full">
+                  {dr.subject || ''}
+                </div>
+                <div className="font-medium text-[6px] text-indigo-600 leading-tight truncate max-w-full">
+                  {dr.batch?.name || ''}
+                </div>
               </>
             )}
-            <div className="font-medium text-[9px] text-gray-600">
+            <div className="font-medium text-[6px] text-gray-600 leading-tight truncate max-w-full">
               {dr.status === 'break' ? '' : roomDisplay(dr)}
             </div>
           </div>
@@ -724,15 +978,9 @@ export default function RoutineManager3D({
     );
   };
 
-  const printDate = new Date().toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-
-  // ─── VIEW: Multiple Batches ──────────────────────────────────
-  const renderMultipleBatchesView = () => {
-    const batchesWithContent = routinesByBatch.filter(
+  // ==================== MULTI BATCH VIEW ====================
+  const renderMultiBatchView = () => {
+    const withContent = routinesByBatch.filter(
       (b) =>
         b.routines.filter((r) => r.status === 'active' || r.status === 'break')
           .length > 0
@@ -744,7 +992,7 @@ export default function RoutineManager3D({
             <BookOpen size={14} className="inline mr-1" />
             All Batches •{' '}
             {allActiveRoutines.filter((r) => r.status === 'active').length}{' '}
-            routines • {batchesWithContent.length} batches
+            routines • {withContent.length} batches
           </span>
           <button
             onClick={() => window.print()}
@@ -754,11 +1002,10 @@ export default function RoutineManager3D({
             Print All
           </button>
         </div>
-        {/* SCREEN */}
         <div className="p-2 space-y-3 print:hidden">
-          {batchesWithContent.map(({ batch, routines: br }) => {
-            const isExpanded = expandedBatchSections[batch.id] !== false;
-            const count = br.filter(
+          {withContent.map(({ batch, routines: br }) => {
+            const exp = expandedBatchSections[batch.id] !== false;
+            const cnt = br.filter(
               (r) => r.status === 'active' || r.status === 'break'
             ).length;
             return (
@@ -767,11 +1014,11 @@ export default function RoutineManager3D({
                 className="bg-white rounded-lg border shadow-sm overflow-hidden"
               >
                 <button
-                  onClick={() => toggleBatchSection(batch.id)}
+                  onClick={() => toggleBatch(batch.id)}
                   className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50"
                 >
                   <div className="flex items-center gap-3">
-                    <motion.div animate={{ rotate: isExpanded ? 90 : 0 }}>
+                    <motion.div animate={{ rotate: exp ? 90 : 0 }}>
                       <ChevronRight size={18} className="text-gray-500" />
                     </motion.div>
                     <div className="text-left">
@@ -782,7 +1029,7 @@ export default function RoutineManager3D({
                           : ''}
                       </h3>
                       <p className="text-xs text-gray-500">
-                        {count} routine{count !== 1 ? 's' : ''}
+                        {cnt} routine{cnt !== 1 ? 's' : ''}
                       </p>
                     </div>
                   </div>
@@ -797,7 +1044,7 @@ export default function RoutineManager3D({
                   </span>
                 </button>
                 <AnimatePresence>
-                  {isExpanded && (
+                  {exp && (
                     <motion.div
                       initial={{ height: 0 }}
                       animate={{ height: 'auto' }}
@@ -814,19 +1061,18 @@ export default function RoutineManager3D({
             );
           })}
         </div>
-        {/* PRINT - Each batch on fresh page */}
         <div className="hidden print:block">
-          {batchesWithContent.map(({ batch, routines: br }, idx) => (
+          {withContent.map(({ batch, routines: br }, idx) => (
             <div key={batch.id} className="print-page">
-              <div className="text-center py-2 border-b-2 border-black">
-                <h1 className="text-lg font-bold uppercase">
+              <div className="text-center py-1 border-b border-black">
+                <h1 className="text-[12px] font-bold uppercase">
                   Asian College of Higher Studies
                 </h1>
-                <h2 className="text-base font-semibold">
+                <h2 className="text-[10px] font-semibold">
                   Weekly Class Routine
                 </h2>
               </div>
-              <div className="flex justify-between px-2 py-1 text-[10px] border-b border-gray-400">
+              <div className="flex justify-between px-2 py-0.5 text-[7px] border-b border-gray-400">
                 <div>
                   <b>Batch: </b>
                   {batch.name || 'Unassigned'}
@@ -847,16 +1093,16 @@ export default function RoutineManager3D({
                 <thead>
                   <tr>
                     <th
-                      className="border-2 border-black bg-gray-300 text-[10px] font-bold p-1 text-center"
-                      style={{ width: '5%' }}
+                      className="border border-black bg-gray-300 text-[7px] font-bold p-0.5 text-center"
+                      style={{ width: '4%' }}
                     >
                       Day
                     </th>
                     {TIME_SLOTS.map((s) => (
                       <th
                         key={s.id}
-                        className="border-2 border-black bg-gray-300 text-[8px] font-bold p-1 text-center"
-                        style={{ width: `${95 / 14}%` }}
+                        className="border border-black bg-gray-300 text-[6px] font-bold p-0.5 text-center leading-tight"
+                        style={{ width: `${96 / 14}%` }}
                       >
                         {s.display}
                       </th>
@@ -866,7 +1112,7 @@ export default function RoutineManager3D({
                 <tbody>
                   {DAYS.map((day, di) => (
                     <tr key={di} style={{ height: `${100 / 6}%` }}>
-                      <td className="border-2 border-black bg-gray-200 text-[10px] font-bold text-center p-1">
+                      <td className="border border-black bg-gray-200 text-[7px] font-bold text-center p-0.5">
                         {day.substring(0, 3)}
                       </td>
                       {TIME_SLOTS.map((slot) => {
@@ -885,8 +1131,8 @@ export default function RoutineManager3D({
                   ))}
                 </tbody>
               </table>
-              <div className="text-[8px] text-gray-500 text-center mt-1">
-                Page {idx + 1}/{batchesWithContent.length} | {printDate}
+              <div className="text-[6px] text-gray-500 text-center mt-0.5">
+                Page {idx + 1}/{withContent.length} | {printDate}
               </div>
             </div>
           ))}
@@ -895,7 +1141,7 @@ export default function RoutineManager3D({
     );
   };
 
-  // ─── VIEW: Faculty ───────────────────────────────────────────
+  // ==================== FACULTY VIEW ====================
   const renderFacultyView = () => (
     <div className="flex-1 flex overflow-hidden">
       <div className="w-80 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0 print:hidden">
@@ -910,14 +1156,14 @@ export default function RoutineManager3D({
             />
             <input
               type="text"
-              placeholder="Search..."
+              placeholder="Search faculty..."
               value={facultySearch}
               onChange={(e) => setFacultySearch(e.target.value)}
               className="pl-9 pr-3 py-2 border rounded-lg w-full text-sm"
             />
           </div>
           <div className="space-y-1 max-h-[calc(100vh-350px)] overflow-y-auto">
-            {filteredFaculties.map((f) => {
+            {filteredFacultyList.map((f) => {
               const cnt = allActiveRoutines.filter(
                 (r) => r.facultyId === f.id && r.status === 'active'
               ).length;
@@ -954,25 +1200,19 @@ export default function RoutineManager3D({
         </div>
       </div>
       <div className="flex-1 overflow-auto">
-        {selectedFaculty && selectedFacultyInfo ? (
+        {selectedFaculty && facultyInfo ? (
           <>
             <div className="p-4 print:hidden">
               <h3 className="text-lg font-bold mb-2">
-                {selectedFacultyInfo.name}'s Schedule
+                {facultyInfo.name}'s Schedule
               </h3>
               <p className="text-sm text-gray-500 mb-4">
-                {
-                  selectedFacultyRoutines.filter((r) => r.status === 'active')
-                    .length
-                }{' '}
+                {facultyRoutines.filter((r) => r.status === 'active').length}{' '}
                 classes across{' '}
-                {
-                  new Set(selectedFacultyRoutines.map((r) => r.batch?.name))
-                    .size
-                }{' '}
+                {new Set(facultyRoutines.map((r) => r.batch?.name)).size}{' '}
                 batches
               </p>
-              {renderTable(selectedFacultyRoutines, 'fac', false)}
+              {renderTable(facultyRoutines, 'fac', false)}
               <div className="mt-6">
                 <h4 className="text-sm font-semibold mb-2">Summary</h4>
                 <table className="w-full text-sm border">
@@ -987,7 +1227,7 @@ export default function RoutineManager3D({
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedFacultyRoutines
+                    {facultyRoutines
                       .sort((a, b) => a.day - b.day || a.timeSlot - b.timeSlot)
                       .map((r, i) => (
                         <tr key={i}>
@@ -1002,7 +1242,7 @@ export default function RoutineManager3D({
                             {r.subject ||
                               (r.status === 'break' ? 'BREAK' : 'N/A')}
                           </td>
-                          <td className="border p-2 text-xs">
+                          <td className="border p-2 text-xs font-medium text-indigo-600">
                             {r.batch?.name || 'N/A'}
                           </td>
                           <td className="border p-2 text-xs">
@@ -1023,25 +1263,21 @@ export default function RoutineManager3D({
                 </table>
               </div>
             </div>
-            {/* PRINT - Single page */}
-            <div className="hidden print:block p-2">
-              <div className="text-center py-1 border-b-2 border-black">
-                <h1 className="text-base font-bold uppercase">
+            <div className="hidden print:block p-1">
+              <div className="text-center py-0.5 border-b border-black">
+                <h1 className="text-[11px] font-bold uppercase">
                   Asian College of Higher Studies
                 </h1>
-                <h2 className="text-sm">
-                  Faculty Routine - {selectedFacultyInfo.name}
+                <h2 className="text-[9px]">
+                  Faculty Routine - {facultyInfo.name}
                 </h2>
-                <p className="text-xs">
-                  {selectedFacultyInfo.designation || 'Faculty'} |{' '}
-                  {
-                    selectedFacultyRoutines.filter((r) => r.status === 'active')
-                      .length
-                  }{' '}
+                <p className="text-[7px]">
+                  {facultyInfo.designation || 'Faculty'} |{' '}
+                  {facultyRoutines.filter((r) => r.status === 'active').length}{' '}
                   Classes
                 </p>
               </div>
-              <div className="flex justify-between px-2 py-0.5 text-[9px] border-b border-gray-400">
+              <div className="flex justify-between px-2 py-0.5 text-[7px] border-b border-gray-400">
                 <div>
                   <b>Date: </b>
                   {printDate}
@@ -1057,16 +1293,16 @@ export default function RoutineManager3D({
                 <thead>
                   <tr>
                     <th
-                      className="border-2 border-black bg-gray-300 text-[9px] font-bold p-0.5 text-center"
-                      style={{ width: '5%' }}
+                      className="border border-black bg-gray-300 text-[7px] font-bold p-0.5 text-center"
+                      style={{ width: '4%' }}
                     >
                       Day
                     </th>
                     {TIME_SLOTS.map((s) => (
                       <th
                         key={s.id}
-                        className="border-2 border-black bg-gray-300 text-[7px] font-bold p-0.5 text-center"
-                        style={{ width: `${95 / 14}%` }}
+                        className="border border-black bg-gray-300 text-[6px] font-bold p-0.5 text-center leading-tight"
+                        style={{ width: `${96 / 14}%` }}
                       >
                         {s.display}
                       </th>
@@ -1076,14 +1312,14 @@ export default function RoutineManager3D({
                 <tbody>
                   {DAYS.map((day, di) => (
                     <tr key={di} style={{ height: `${100 / 6}%` }}>
-                      <td className="border-2 border-black bg-gray-200 text-[9px] font-bold text-center p-0.5">
+                      <td className="border border-black bg-gray-200 text-[7px] font-bold text-center p-0.5">
                         {day.substring(0, 3)}
                       </td>
                       {TIME_SLOTS.map((slot) => {
-                        const here = selectedFacultyRoutines.filter(
+                        const here = facultyRoutines.filter(
                           (r) => r.day === di && r.timeSlot === slot.id
                         );
-                        const merged = selectedFacultyRoutines.find(
+                        const merged = facultyRoutines.find(
                           (r) =>
                             r.day === di &&
                             r.timeSlotEnd &&
@@ -1101,50 +1337,42 @@ export default function RoutineManager3D({
                   ))}
                 </tbody>
               </table>
-              <div className="mt-3">
-                <h4 className="text-[10px] font-bold border-b border-black pb-0.5">
+              <div className="mt-2">
+                <h4 className="text-[8px] font-bold border-b border-black pb-0.5">
                   Summary
                 </h4>
-                <table className="w-full text-[8px] border-collapse">
+                <table className="w-full text-[7px] border-collapse">
                   <thead>
                     <tr className="bg-gray-200">
-                      <th className="border border-black p-1 text-left">Day</th>
-                      <th className="border border-black p-1 text-left">
-                        Time
-                      </th>
-                      <th className="border border-black p-1 text-left">
-                        Subject
-                      </th>
-                      <th className="border border-black p-1 text-left">
-                        Batch
-                      </th>
-                      <th className="border border-black p-1 text-left">
-                        Room
-                      </th>
+                      <th className="border border-black p-0.5">Day</th>
+                      <th className="border border-black p-0.5">Time</th>
+                      <th className="border border-black p-0.5">Subject</th>
+                      <th className="border border-black p-0.5">Batch</th>
+                      <th className="border border-black p-0.5">Room</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedFacultyRoutines
+                    {facultyRoutines
                       .filter((r) => r.status === 'active')
                       .sort((a, b) => a.day - b.day || a.timeSlot - b.timeSlot)
                       .map((r, i) => (
                         <tr key={i}>
-                          <td className="border border-black p-1">
+                          <td className="border border-black p-0.5">
                             {DAYS[r.day]}
                           </td>
-                          <td className="border border-black p-1">
+                          <td className="border border-black p-0.5">
                             {TIME_SLOTS[r.timeSlot]?.display}
                             {r.timeSlotEnd
                               ? `-${TIME_SLOTS[r.timeSlotEnd]?.display}`
                               : ''}
                           </td>
-                          <td className="border border-black p-1">
+                          <td className="border border-black p-0.5">
                             {r.subject || 'N/A'}
                           </td>
-                          <td className="border border-black p-1">
+                          <td className="border border-black p-0.5 font-medium text-indigo-700">
                             {r.batch?.name || 'N/A'}
                           </td>
-                          <td className="border border-black p-1">
+                          <td className="border border-black p-0.5">
                             {roomDisplay(r)}
                           </td>
                         </tr>
@@ -1152,7 +1380,7 @@ export default function RoutineManager3D({
                   </tbody>
                 </table>
               </div>
-              <div className="text-[7px] text-gray-500 text-center mt-1">
+              <div className="text-[6px] text-gray-500 text-center mt-0.5">
                 {printDate}
               </div>
             </div>
@@ -1170,7 +1398,8 @@ export default function RoutineManager3D({
   );
 
   if (!isOpen) return null;
-  const semesterDisplay = getSemesterDisplay(batchSemester);
+  const headerBatchName =
+    selectedBatch?.name || (batchId ? `Batch #${batchId}` : 'All Batches');
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden print:overflow-visible">
@@ -1199,20 +1428,22 @@ export default function RoutineManager3D({
                   Routine Manager
                 </h2>
                 <p className="text-white/70 text-xs">
-                  {!isBatchView
-                    ? `All Batches (${
-                        allActiveRoutines.filter((r) => r.status === 'active')
-                          .length
-                      })`
-                    : viewMode === 'faculty'
-                    ? 'Faculty Schedules'
-                    : selectedBatch
-                    ? `Batch: ${selectedBatch.name}`
-                    : `Batch #${batchId}`}
-                  {semesterDisplay && isBatchView
-                    ? ` • ${semesterDisplay}`
-                    : ''}{' '}
-                  • 7:01 AM – 2:00 PM
+                  <span className="font-medium text-white">
+                    {headerBatchName}
+                  </span>
+                  {selectedBatch?.department?.name && (
+                    <span> • {selectedBatch.department.name}</span>
+                  )}
+                  <span>
+                    {' '}
+                    •{' '}
+                    {
+                      allActiveRoutines.filter((r) => r.status === 'active')
+                        .length
+                    }{' '}
+                    routines
+                  </span>
+                  <span> • 7:01 AM – 2:00 PM</span>
                 </p>
               </div>
             </div>
@@ -1285,21 +1516,20 @@ export default function RoutineManager3D({
             </div>
           </div>
         </div>
-
         <div className="hidden print:block w-full flex-shrink-0">
-          <div className="text-center py-2 border-b-2 border-black">
-            <h1 className="text-lg font-bold uppercase">
+          <div className="text-center py-1 border-b border-black">
+            <h1 className="text-[12px] font-bold uppercase">
               Asian College of Higher Studies
             </h1>
-            <h2 className="text-base font-semibold">Weekly Class Routine</h2>
-            {semesterDisplay && isBatchView && (
-              <h3 className="text-sm font-bold">{semesterDisplay}</h3>
-            )}
+            <h2 className="text-[10px] font-semibold">Weekly Class Routine</h2>
           </div>
-          <div className="flex justify-between items-center px-3 py-1.5 text-xs border-b border-gray-500">
+          <div className="flex justify-between items-center px-3 py-1 text-[7px] border-b border-gray-500">
             <div>
               <b>Batch: </b>
-              {selectedBatch?.name || `#${batchId}` || 'All'}
+              {selectedBatch?.name || batchId || 'All'}
+              {selectedBatch?.department?.name
+                ? ` (${selectedBatch.department.name})`
+                : ''}
             </div>
             <div>
               <b>Date: </b>
@@ -1310,7 +1540,6 @@ export default function RoutineManager3D({
             </div>
           </div>
         </div>
-
         {mergeMode && (
           <div className="bg-yellow-50 border-b px-4 py-1.5 flex items-center justify-between flex-shrink-0 print:hidden">
             <span className="text-xs">
@@ -1324,7 +1553,7 @@ export default function RoutineManager3D({
               </span>
               {mergeSelections.length >= 2 && (
                 <button
-                  onClick={handleMergeConfirm}
+                  onClick={confirmMerge}
                   className="px-3 py-1 bg-yellow-600 text-white rounded text-xs"
                 >
                   Merge
@@ -1333,7 +1562,6 @@ export default function RoutineManager3D({
             </div>
           </div>
         )}
-
         <AnimatePresence>
           {successMsg && (
             <motion.div
@@ -1358,7 +1586,6 @@ export default function RoutineManager3D({
             </motion.div>
           )}
         </AnimatePresence>
-
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 size={40} className="animate-spin text-indigo-600" />
@@ -1366,12 +1593,9 @@ export default function RoutineManager3D({
         ) : viewMode === 'faculty' ? (
           renderFacultyView()
         ) : viewMode === 'multipleBatches' || !isBatchView ? (
-          renderMultipleBatchesView()
+          renderMultiBatchView()
         ) : (
-          <div
-            ref={printRef}
-            className="flex-1 overflow-auto print:overflow-visible"
-          >
+          <div className="flex-1 overflow-auto print:overflow-visible">
             <div className="hidden print:block w-full h-full">
               <table
                 className="w-full h-full border-collapse"
@@ -1380,16 +1604,16 @@ export default function RoutineManager3D({
                 <thead>
                   <tr>
                     <th
-                      className="border-2 border-black bg-gray-300 text-xs font-bold p-1 text-center"
-                      style={{ width: '5%' }}
+                      className="border border-black bg-gray-300 text-[7px] font-bold p-0.5 text-center"
+                      style={{ width: '4%' }}
                     >
                       Day
                     </th>
                     {TIME_SLOTS.map((s) => (
                       <th
                         key={s.id}
-                        className="border-2 border-black bg-gray-300 text-[10px] font-bold p-1 text-center"
-                        style={{ width: `${95 / 14}%` }}
+                        className="border border-black bg-gray-300 text-[6px] font-bold p-0.5 text-center leading-tight"
+                        style={{ width: `${96 / 14}%` }}
                       >
                         {s.display}
                       </th>
@@ -1399,7 +1623,7 @@ export default function RoutineManager3D({
                 <tbody>
                   {DAYS.map((day, di) => (
                     <tr key={di} style={{ height: `${100 / 6}%` }}>
-                      <td className="border-2 border-black bg-gray-200 text-xs font-bold text-center p-1 align-middle">
+                      <td className="border border-black bg-gray-200 text-[7px] font-bold text-center p-0.5">
                         {day}
                       </td>
                       {TIME_SLOTS.map((slot) => {
@@ -1418,7 +1642,7 @@ export default function RoutineManager3D({
                   ))}
                 </tbody>
               </table>
-              <div className="text-[9px] text-gray-500 text-center mt-2">
+              <div className="text-[6px] text-gray-500 text-center mt-0.5">
                 Generated: {printDate}
               </div>
             </div>
@@ -1487,68 +1711,50 @@ export default function RoutineManager3D({
                     ))}
                   </select>
                 </div>
-                {form.status !== 'break' && (
+                {form.status !== 'break' ? (
                   <>
                     <div>
                       <label className="block text-xs font-semibold mb-1">
                         Faculty *
                       </label>
-                      <select
+                      <SearchableDropdown
                         value={form.facultyId}
-                        onChange={(e) =>
-                          setForm({ ...form, facultyId: e.target.value })
-                        }
-                        className="w-full rounded-lg border px-3 py-2 text-sm"
-                      >
-                        <option value="">Select</option>
-                        {faculties.map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(v) => setForm({ ...form, facultyId: v })}
+                        options={faculties}
+                        placeholder="Search faculty..."
+                        labelKey="name"
+                        valueKey="id"
+                        required
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold mb-1">
                         Batch *
                       </label>
-                      <select
+                      <SearchableDropdown
                         value={form.batchId}
-                        onChange={(e) =>
-                          setForm({ ...form, batchId: e.target.value })
-                        }
-                        className="w-full rounded-lg border px-3 py-2 text-sm"
+                        onChange={(v) => setForm({ ...form, batchId: v })}
+                        options={batches}
+                        placeholder="Search batch..."
+                        labelKey="name"
+                        valueKey="id"
                         disabled={!!batchId}
-                      >
-                        <option value="">Select</option>
-                        {batches.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name}
-                          </option>
-                        ))}
-                      </select>
+                        required
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold mb-1">
                         Classroom
                       </label>
-                      <select
+                      <SearchableDropdown
                         value={form.classroomId}
-                        onChange={(e) =>
-                          setForm({ ...form, classroomId: e.target.value })
-                        }
-                        className="w-full rounded-lg border px-3 py-2 text-sm"
+                        onChange={(v) => setForm({ ...form, classroomId: v })}
+                        options={form.batchId ? filteredClassrooms : classrooms}
+                        placeholder="Search classroom..."
+                        labelKey="name"
+                        valueKey="id"
                         disabled={!!classroomId}
-                      >
-                        <option value="">Select</option>
-                        {(form.batchId ? filteredClassrooms : classrooms).map(
-                          (c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          )
-                        )}
-                      </select>
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold mb-1">
@@ -1579,28 +1785,22 @@ export default function RoutineManager3D({
                       />
                     </div>
                   </>
-                )}
-                {form.status === 'break' && (
+                ) : (
                   <>
                     <div>
                       <label className="block text-xs font-semibold mb-1">
                         Batch *
                       </label>
-                      <select
+                      <SearchableDropdown
                         value={form.batchId}
-                        onChange={(e) =>
-                          setForm({ ...form, batchId: e.target.value })
-                        }
-                        className="w-full rounded-lg border px-3 py-2 text-sm"
+                        onChange={(v) => setForm({ ...form, batchId: v })}
+                        options={batches}
+                        placeholder="Search batch..."
+                        labelKey="name"
+                        valueKey="id"
                         disabled={!!batchId}
-                      >
-                        <option value="">Select</option>
-                        {batches.map((b) => (
-                          <option key={b.id} value={b.id}>
-                            {b.name}
-                          </option>
-                        ))}
-                      </select>
+                        required
+                      />
                     </div>
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                       <Coffee
@@ -1704,7 +1904,7 @@ export default function RoutineManager3D({
           </div>
         )}
       </AnimatePresence>
-
+      {/* Delete Modal */}
       <AnimatePresence>
         {showDeleteConfirm && deleteTarget && (
           <div className="fixed inset-0 z-[65] flex items-center justify-center print:hidden">
@@ -1760,7 +1960,7 @@ export default function RoutineManager3D({
                   Cancel
                 </button>
                 <button
-                  onClick={handleDeleteAllInSlot}
+                  onClick={deleteSlot}
                   className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
                 >
                   Delete All
@@ -1770,7 +1970,7 @@ export default function RoutineManager3D({
           </div>
         )}
       </AnimatePresence>
-
+      {/* Conflict Modal */}
       <AnimatePresence>
         {showConflictModal && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center print:hidden">
@@ -1878,7 +2078,7 @@ export default function RoutineManager3D({
         @media print {
           @page {
             size: A4 landscape;
-            margin: 4mm;
+            margin: 3mm;
           }
           html,
           body {
@@ -1906,33 +2106,13 @@ export default function RoutineManager3D({
           .print\\:hidden {
             display: none !important;
           }
-          .print\\:block {
-            display: block !important;
-          }
-          .print\\:flex {
-            display: flex !important;
-          }
-          .print\\:flex-col {
-            flex-direction: column !important;
-          }
-          .print\\:items-center {
-            align-items: center !important;
-          }
-          .print\\:justify-center {
-            justify-content: center !important;
-          }
-          .print\\:text-center {
-            text-align: center !important;
-          }
-          .print\\:overflow-visible {
-            overflow: visible !important;
-          }
           .print-page {
             page-break-after: always;
             page-break-inside: avoid;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            justify-content: center;
           }
           .print-page:last-child {
             page-break-after: avoid;
@@ -1940,14 +2120,46 @@ export default function RoutineManager3D({
           thead {
             display: table-header-group;
           }
-          tbody {
-            display: table-row-group;
-          }
           tr {
             page-break-inside: avoid;
           }
           td {
             vertical-align: middle !important;
+          }
+          table {
+            table-layout: fixed !important;
+            width: 100% !important;
+          }
+          th,
+          td {
+            padding: 1px !important;
+            font-size: 7px !important;
+            line-height: 1.1 !important;
+            word-break: break-word !important;
+            overflow: hidden !important;
+          }
+          th:first-child,
+          td:first-child {
+            width: 4% !important;
+          }
+          h1 {
+            font-size: 12px !important;
+          }
+          h2 {
+            font-size: 10px !important;
+          }
+          h3 {
+            font-size: 9px !important;
+          }
+          p,
+          div {
+            font-size: 7px !important;
+          }
+          .border-b-2 {
+            border-bottom-width: 1px !important;
+          }
+          .border-2 {
+            border-width: 1px !important;
           }
         }
       `}</style>

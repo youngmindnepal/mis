@@ -12,7 +12,7 @@ import RoutineManager3D from '@/components/classroom/RoutineManager3D';
 import { Calendar, Clock, Library } from 'lucide-react';
 import ELibrarySearch from '@/components/library/ELibrarySearch';
 
-// Custom Confirmation Modal Component
+// Custom Confirmation Modal
 function ConfirmModal({ isOpen, onClose, onConfirm, title, message, loading }) {
   return (
     <AnimatePresence>
@@ -44,24 +44,23 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, loading }) {
               <button
                 onClick={onClose}
                 disabled={loading}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={onConfirm}
                 disabled={loading}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
-                    <Icons.Loader2 size={18} className="animate-spin" />
+                    <Icons.Loader2 size={18} className="animate-spin" />{' '}
                     Deleting...
                   </>
                 ) : (
                   <>
-                    <Icons.Trash2 size={18} />
-                    Delete
+                    <Icons.Trash2 size={18} /> Delete
                   </>
                 )}
               </button>
@@ -96,6 +95,7 @@ function LoadingState() {
   );
 }
 
+// ==================== BATCH ACCORDION ====================
 const BatchAccordion = ({
   batch,
   classrooms,
@@ -105,16 +105,29 @@ const BatchAccordion = ({
   onDelete,
   onOpenCalendar,
   onOpenRoutine,
-  onOpenBatchReport, // ADDED
+  onOpenBatchReport,
   hasUpdatePermission,
   hasDeletePermission,
   studentCount,
+  showArchived,
+  onToggleArchive,
 }) => {
-  const activeClassrooms = classrooms.filter((c) => c.status !== 'archived');
+  const activeClassrooms = classrooms.filter(
+    (c) => !c.status || c.status === 'active'
+  );
+  const archivedClassrooms = classrooms.filter((c) => c.status === 'archived');
+  const displayClassrooms = showArchived ? classrooms : activeClassrooms;
   const totalSessions = classrooms.reduce(
     (sum, c) => sum + (c._count?.sessions || 0),
     0
   );
+
+  // Determine effective batch status based on classrooms
+  const allClassroomsArchived =
+    classrooms.length > 0 && activeClassrooms.length === 0;
+  const effectiveStatus = allClassroomsArchived
+    ? 'inactive'
+    : batch.status || 'active';
 
   return (
     <div className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200">
@@ -141,32 +154,59 @@ const BatchAccordion = ({
             <h3 className="text-lg font-bold text-gray-900">{batch.name}</h3>
             <p className="text-sm text-gray-500">
               {batch.department?.name} • {batch.academicYear || 'N/A'}
+              {allClassroomsArchived &&
+                activeClassrooms.length === 0 &&
+                classrooms.length > 0 && (
+                  <span className="text-red-500 ml-2">
+                    (All classrooms inactive)
+                  </span>
+                )}
             </p>
           </div>
         </div>
         <div
-          className="flex items-center gap-4"
+          className="flex items-center gap-3"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center gap-2 text-sm">
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              {activeClassrooms.length} Room
-              {activeClassrooms.length !== 1 ? 's' : ''}
+          <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            {activeClassrooms.length} Active
+          </span>
+          {archivedClassrooms.length > 0 && (
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-200 text-gray-600">
+              {archivedClassrooms.length} Inactive
             </span>
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              {studentCount} Active Student{studentCount !== 1 ? 's' : ''}
-            </span>
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-              {totalSessions} Session{totalSessions !== 1 ? 's' : ''}
-            </span>
-          </div>
-          {/* ADDED: Batch Report Button */}
+          )}
+          <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            {studentCount} Student{studentCount !== 1 ? 's' : ''}
+          </span>
+          <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+            {totalSessions} Session{totalSessions !== 1 ? 's' : ''}
+          </span>
+
+          {archivedClassrooms.length > 0 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleArchive();
+              }}
+              className={`px-3 py-1.5 text-xs rounded-lg flex items-center gap-1.5 transition-colors ${
+                showArchived
+                  ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Icons.EyeOff size={14} />
+              {showArchived
+                ? 'Hide Inactive'
+                : `Inactive (${archivedClassrooms.length})`}
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
-              onOpenBatchReport(batch.id, batch.name, batch.academicYear);
+              onOpenBatchReport(batch.id, batch.name);
             }}
-            className="cursor-pointer px-3 py-1.5 text-xs bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 text-xs bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex items-center gap-1.5 transition-colors"
             title="View Batch Attendance Report"
           >
             <Icons.BarChart3 size={14} /> Report
@@ -176,31 +216,31 @@ const BatchAccordion = ({
               e.stopPropagation();
               onOpenCalendar(null, batch.id);
             }}
-            className="cursor-pointer px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 flex items-center gap-1.5 transition-colors"
             title="Open Batch Calendar"
           >
-            <Icons.CalendarDays size={14} /> Batch Calendar
+            <Icons.CalendarDays size={14} /> Calendar
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               onOpenRoutine(null, batch.id);
             }}
-            className="cursor-pointer px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1.5 transition-colors"
+            className="px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1.5 transition-colors"
             title="Open Batch Routine"
           >
             <Clock size={14} /> Routine
           </button>
           <span
             className={`px-2 py-1 rounded-full text-xs font-medium ${
-              batch.status === 'active'
+              effectiveStatus === 'active'
                 ? 'bg-green-100 text-green-800'
-                : batch.status === 'completed'
+                : effectiveStatus === 'completed'
                 ? 'bg-gray-100 text-gray-800'
                 : 'bg-red-100 text-red-800'
             }`}
           >
-            {batch.status}
+            {effectiveStatus}
           </span>
         </div>
       </div>
@@ -215,13 +255,40 @@ const BatchAccordion = ({
             className="overflow-hidden"
           >
             <div className="border-t border-gray-200">
-              {classrooms.length === 0 ? (
+              {!showArchived && archivedClassrooms.length > 0 && (
+                <div className="px-4 py-2 bg-gray-50 border-b flex items-center justify-between">
+                  <span className="text-xs text-gray-500">
+                    {archivedClassrooms.length} inactive classroom
+                    {archivedClassrooms.length !== 1 ? 's' : ''} hidden.
+                  </span>
+                  <button
+                    onClick={onToggleArchive}
+                    className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Show inactive
+                  </button>
+                </div>
+              )}
+              {showArchived && archivedClassrooms.length > 0 && (
+                <div className="px-4 py-2 bg-blue-50 border-b flex items-center justify-between">
+                  <span className="text-xs text-blue-600">
+                    Showing all {classrooms.length} classrooms.
+                  </span>
+                  <button
+                    onClick={onToggleArchive}
+                    className="text-xs text-gray-600 hover:text-gray-800 font-medium"
+                  >
+                    Hide inactive
+                  </button>
+                </div>
+              )}
+              {displayClassrooms.length === 0 ? (
                 <div className="text-center py-12">
                   <Icons.BookOpen
                     size={48}
                     className="text-gray-300 mx-auto mb-3"
                   />
-                  <p className="text-gray-500">No classrooms in this batch</p>
+                  <p className="text-gray-500">No classrooms to display</p>
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -252,18 +319,35 @@ const BatchAccordion = ({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {classrooms.map((classroom) => (
+                      {displayClassrooms.map((classroom) => (
                         <tr
                           key={classroom.id}
-                          className="hover:bg-gray-50 transition-colors"
+                          className={`hover:bg-gray-50 transition-colors ${
+                            classroom.status === 'archived'
+                              ? 'opacity-60 bg-gray-50'
+                              : ''
+                          }`}
                         >
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
-                                <Icons.BookOpen
-                                  size={18}
-                                  className="text-white"
-                                />
+                              <div
+                                className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                  classroom.status === 'archived'
+                                    ? 'bg-gray-400'
+                                    : 'bg-gradient-to-br from-indigo-500 to-purple-600'
+                                }`}
+                              >
+                                {classroom.status === 'archived' ? (
+                                  <Icons.Archive
+                                    size={18}
+                                    className="text-white"
+                                  />
+                                ) : (
+                                  <Icons.BookOpen
+                                    size={18}
+                                    className="text-white"
+                                  />
+                                )}
                               </div>
                               <div>
                                 <p className="font-medium text-gray-900">
@@ -306,9 +390,9 @@ const BatchAccordion = ({
                           <td className="py-3 px-4 text-center">
                             <span
                               className={`inline-flex px-3 py-1 rounded-full text-xs font-medium ${
-                                classroom.status === 'active'
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-gray-100 text-gray-800'
+                                classroom.status === 'archived'
+                                  ? 'bg-red-100 text-red-800'
+                                  : 'bg-green-100 text-green-800'
                               }`}
                             >
                               {classroom.status || 'Active'}
@@ -319,7 +403,7 @@ const BatchAccordion = ({
                               <a
                                 href={`/dashboard/classroom/${classroom.id}`}
                                 className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                                title="View Details"
+                                title="View"
                               >
                                 <Icons.Eye size={16} />
                               </a>
@@ -332,7 +416,7 @@ const BatchAccordion = ({
                                   );
                                 }}
                                 className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg"
-                                title="Classroom Calendar"
+                                title="Calendar"
                               >
                                 <Icons.CalendarDays size={16} />
                               </button>
@@ -345,7 +429,7 @@ const BatchAccordion = ({
                                   );
                                 }}
                                 className="p-2 text-green-600 hover:bg-green-50 rounded-lg"
-                                title="Classroom Routine"
+                                title="Routine"
                               >
                                 <Clock size={16} />
                               </button>
@@ -385,138 +469,65 @@ const BatchAccordion = ({
   );
 };
 
-// Add this component inside app/classrooms/page.jsx or as a separate file
-
-// Enhanced AttendanceSummaryReport wrapper that fetches semester dates from calendar
-function AttendanceReportWithSemesterDates({
-  onClose,
-  batchId,
-  batchName,
-  academicYear,
-}) {
+// ==================== ATTENDANCE REPORT WRAPPER ====================
+function AttendanceReportWithSemesterDates({ onClose, batchId, batchName }) {
   const [semesterDates, setSemesterDates] = useState(null);
   const [loadingDates, setLoadingDates] = useState(true);
-  const [error, setError] = useState(null);
-
   useEffect(() => {
-    if (batchId) {
-      fetchSemesterDates();
-    }
+    if (batchId) fetchSemesterDates();
   }, [batchId]);
-
   const fetchSemesterDates = async () => {
     setLoadingDates(true);
-    setError(null);
-
     try {
-      // Try to fetch calendar events for semester dates
-      const response = await fetch(
-        `/api/batches/${batchId}/events?type=semester`
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-
-        // Use the effective semester dates from the API
-        if (
-          data.effectiveSemesterDates?.startDate ||
-          data.effectiveSemesterDates?.endDate
-        ) {
-          const startDate = data.effectiveSemesterDates.startDate
-            ? new Date(data.effectiveSemesterDates.startDate)
-                .toISOString()
-                .split('T')[0]
-            : '';
-          const endDate = data.effectiveSemesterDates.endDate
-            ? new Date(data.effectiveSemesterDates.endDate)
-                .toISOString()
-                .split('T')[0]
-            : '';
-
-          console.log('Semester dates found:', { startDate, endDate });
-          setSemesterDates({ startDate, endDate });
-          setLoadingDates(false);
-          return;
-        }
-
-        // If specific semester events found, use those
-        if (data.semesterDates?.start || data.semesterDates?.end) {
-          const startDate = data.semesterDates.start?.date
-            ? new Date(data.semesterDates.start.date)
-                .toISOString()
-                .split('T')[0]
-            : '';
-          const endDate = data.semesterDates.end?.date
-            ? new Date(data.semesterDates.end.date).toISOString().split('T')[0]
-            : '';
-
-          console.log('Semester events found:', { startDate, endDate });
-          setSemesterDates({ startDate, endDate });
+      const r = await fetch(`/api/academic-calendar?batchId=${batchId}`);
+      if (r.ok) {
+        const d = await r.json();
+        const e = d.events || [];
+        const ss = e.find((x) => x.eventType === 'semester_start');
+        const se = e.find((x) => x.eventType === 'semester_end');
+        let s = '',
+          ed = '';
+        if (ss) s = new Date(ss.date).toISOString().split('T')[0];
+        if (se) ed = new Date(se.date).toISOString().split('T')[0];
+        if (s || ed) {
+          setSemesterDates({ startDate: s, endDate: ed });
           setLoadingDates(false);
           return;
         }
       }
-
-      // Fallback: Try fetching batch directly for dates
-      console.log('No semester events found, trying batch dates...');
-      const batchResponse = await fetch(`/api/batches/${batchId}`);
-
-      if (batchResponse.ok) {
-        const batchData = await batchResponse.json();
-        const batch = batchData.batch || batchData;
-
-        if (batch.startDate || batch.endDate) {
-          const startDate = batch.startDate
-            ? new Date(batch.startDate).toISOString().split('T')[0]
-            : '';
-          const endDate = batch.endDate
-            ? new Date(batch.endDate).toISOString().split('T')[0]
-            : '';
-
-          console.log('Using batch dates:', { startDate, endDate });
-          setSemesterDates({ startDate, endDate });
+      const br = await fetch(`/api/batches/${batchId}`);
+      if (br.ok) {
+        const b = (await br.json()).batch || {};
+        if (b.startDate || b.endDate) {
+          setSemesterDates({
+            startDate: b.startDate
+              ? new Date(b.startDate).toISOString().split('T')[0]
+              : '',
+            endDate: b.endDate
+              ? new Date(b.endDate).toISOString().split('T')[0]
+              : '',
+          });
           setLoadingDates(false);
           return;
         }
       }
-
-      // Ultimate fallback: Use current academic year
-      console.log('Using default academic year dates');
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const academicStart =
-        now.getMonth() < 6
-          ? `${currentYear - 1}-07-01`
-          : `${currentYear}-07-01`;
-      const academicEnd =
-        now.getMonth() < 6
-          ? `${currentYear}-06-30`
-          : `${currentYear + 1}-06-30`;
-
+      const n = new Date();
+      const y = n.getFullYear();
       setSemesterDates({
-        startDate: academicStart,
-        endDate: academicEnd,
+        startDate: n.getMonth() < 6 ? `${y - 1}-07-01` : `${y}-07-01`,
+        endDate: n.getMonth() < 6 ? `${y}-06-30` : `${y + 1}-06-30`,
       });
-    } catch (error) {
-      console.error('Error fetching semester dates:', error);
-      setError(error.message);
-
-      // Default fallback
-      const now = new Date();
+    } catch {
+      const n = new Date();
       setSemesterDates({
-        startDate: new Date(now.getFullYear(), 0, 1)
-          .toISOString()
-          .split('T')[0],
-        endDate: new Date(now.getFullYear(), 11, 31)
-          .toISOString()
-          .split('T')[0],
+        startDate: new Date(n.getFullYear(), 0, 1).toISOString().split('T')[0],
+        endDate: new Date(n.getFullYear(), 11, 31).toISOString().split('T')[0],
       });
     } finally {
       setLoadingDates(false);
     }
   };
-
-  if (loadingDates) {
+  if (loadingDates)
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -533,19 +544,10 @@ function AttendanceReportWithSemesterDates({
             size={48}
             className="animate-spin text-indigo-600 mx-auto mb-4"
           />
-          <p className="text-gray-600 font-medium">Loading semester dates...</p>
-          <p className="text-sm text-gray-400 mt-1">
-            {batchName || 'Fetching batch calendar'}
-          </p>
+          <p className="text-gray-600">Loading...</p>
         </motion.div>
       </motion.div>
     );
-  }
-
-  if (error) {
-    console.warn('Using fallback dates due to error:', error);
-  }
-
   return (
     <AttendanceSummaryReport
       onClose={onClose}
@@ -557,6 +559,7 @@ function AttendanceReportWithSemesterDates({
   );
 }
 
+// ==================== MAIN PAGE ====================
 export default function ClassroomPage() {
   const { can, isLoading: permissionsLoading } = usePermissions();
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -566,12 +569,10 @@ export default function ClassroomPage() {
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const [showAttendanceReport, setShowAttendanceReport] = useState(false);
-  // ADDED: Batch-specific report state
   const [showBatchReport, setShowBatchReport] = useState(false);
   const [batchReportData, setBatchReportData] = useState({
     batchId: null,
     batchName: '',
-    academicYear: '',
   });
   const [showAcademicCalendar, setShowAcademicCalendar] = useState(false);
   const [calendarClassroomId, setCalendarClassroomId] = useState(null);
@@ -584,377 +585,281 @@ export default function ClassroomPage() {
   const [expandedBatches, setExpandedBatches] = useState({});
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [batchStatusFilter, setBatchStatusFilter] = useState('active');
   const [expandAll, setExpandAll] = useState(false);
   const [showELibrary, setShowELibrary] = useState(false);
-
-  // Delete confirmation state
   const [deleteModal, setDeleteModal] = useState({
     isOpen: false,
     classroomId: null,
     classroomName: '',
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showArchivedMap, setShowArchivedMap] = useState({});
 
-  const hasReadPermission = can('classroom', 'read');
-  const hasCreatePermission = can('classroom', 'create');
-  const hasUpdatePermission = can('classroom', 'update');
-  const hasDeletePermission = can('classroom', 'delete');
+  const hasRead = can('classroom', 'read');
+  const hasCreate = can('classroom', 'create');
+  const hasUpdate = can('classroom', 'update');
+  const hasDelete = can('classroom', 'delete');
 
-  const handleOpenRoutine = (classroomId = null, batchId = null) => {
-    setRoutineClassroomId(classroomId);
-    setRoutineBatchId(batchId);
+  const handleOpenRoutine = (cid = null, bid = null) => {
+    setRoutineClassroomId(cid);
+    setRoutineBatchId(bid);
     setShowRoutineManager(true);
   };
-
-  const handleOpenCalendar = (classroomId = null, batchId = null) => {
-    setCalendarClassroomId(classroomId);
-    setCalendarBatchId(batchId);
+  const handleOpenCalendar = (cid = null, bid = null) => {
+    setCalendarClassroomId(cid);
+    setCalendarBatchId(bid);
     setShowAcademicCalendar(true);
   };
-
-  // ADDED: Handle opening batch report
-  const handleOpenBatchReport = (batchId, batchName, academicYear) => {
-    setBatchReportData({
-      batchId,
-      batchName: batchName || 'Unknown Batch',
-      academicYear: academicYear || 'N/A',
-    });
+  const handleOpenBatchReport = (bid, bname) => {
+    setBatchReportData({ batchId: bid, batchName: bname || 'Unknown Batch' });
     setShowBatchReport(true);
   };
 
   const fetchClassrooms = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(
-        '/api/classrooms?include=batch,course,faculty,_count'
-      );
+      const response = await fetch('/api/classrooms');
       if (response.ok) {
         const data = await response.json();
-        const classrooms = data.classrooms || data || [];
+        const classrooms = data.classrooms || [];
         const grouped = {};
         const batchIds = new Set();
-
-        classrooms.forEach((classroom) => {
-          const batchKey = classroom.batchId
-            ? classroom.batchId.toString()
-            : 'unassigned';
-          if (classroom.batchId) batchIds.add(classroom.batchId);
-          if (!grouped[batchKey]) {
-            grouped[batchKey] = {
-              batch: classroom.batch || {
+        classrooms.forEach((c) => {
+          const key = c.batchId ? c.batchId.toString() : 'unassigned';
+          if (c.batchId) batchIds.add(c.batchId);
+          if (!grouped[key])
+            grouped[key] = {
+              batch: c.batch || {
                 id: 'unassigned',
                 name: 'Unassigned',
                 status: 'active',
               },
               classrooms: [],
             };
-          }
-          grouped[batchKey].classrooms.push(classroom);
+          grouped[key].classrooms.push(c);
         });
-
-        Object.keys(grouped).forEach((key) =>
-          grouped[key].classrooms.sort((a, b) => a.name.localeCompare(b.name))
+        Object.keys(grouped).forEach((k) =>
+          grouped[k].classrooms.sort((a, b) => a.name.localeCompare(b.name))
         );
         setGroupedClassrooms(grouped);
+        const keys = Object.keys(grouped);
+        if (keys.length > 0 && Object.keys(expandedBatches).length === 0)
+          setExpandedBatches({ [keys[0]]: true });
 
-        const batchKeys = Object.keys(grouped);
-        if (batchKeys.length > 0 && Object.keys(expandedBatches).length === 0) {
-          setExpandedBatches({ [batchKeys[0]]: true });
-        }
-
-        // Fetch active student counts per batch
-        const studentCounts = {};
-        for (const bid of batchIds) {
-          try {
-            const res = await fetch(`/api/batches/${bid}/students`);
-            if (res.ok) {
-              const studentsData = await res.json();
-              const students = studentsData.students || studentsData || [];
-              const activeCount = Array.isArray(students)
-                ? students.filter((s) => !s.status || s.status === 'active')
-                    .length
-                : studentsData.count || students.length || 0;
-              studentCounts[bid] = activeCount;
-            } else {
-              studentCounts[bid] =
+        const counts = {};
+        await Promise.all(
+          Array.from(batchIds).map(async (bid) => {
+            try {
+              const r = await fetch(`/api/batches/${bid}/students`);
+              if (r.ok) {
+                const d = await r.json();
+                const s = d.students || d || [];
+                counts[bid] = Array.isArray(s)
+                  ? s.filter((x) => !x.status || x.status === 'active').length
+                  : d.count || s.length || 0;
+              } else
+                counts[bid] =
+                  grouped[bid.toString()]?.classrooms?.reduce(
+                    (s, c) => s + (c._count?.enrollments || 0),
+                    0
+                  ) || 0;
+            } catch {
+              counts[bid] =
                 grouped[bid.toString()]?.classrooms?.reduce(
-                  (sum, c) => sum + (c._count?.enrollments || 0),
+                  (s, c) => s + (c._count?.enrollments || 0),
                   0
                 ) || 0;
             }
-          } catch (e) {
-            studentCounts[bid] =
-              grouped[bid.toString()]?.classrooms?.reduce(
-                (sum, c) => sum + (c._count?.enrollments || 0),
-                0
-              ) || 0;
-          }
-        }
-        setBatchStudentCounts(studentCounts);
+          })
+        );
+        setBatchStudentCounts(counts);
       }
-    } catch (error) {
-      console.error('Error fetching classrooms:', error);
+    } catch {
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (hasReadPermission) fetchClassrooms();
-  }, [hasReadPermission, refreshTrigger, fetchClassrooms]);
+    if (hasRead) fetchClassrooms();
+  }, [hasRead, refreshTrigger, fetchClassrooms]);
 
-  const showMessage = (message, type = 'success') => {
-    if (type === 'success') {
-      setSuccessMessage(message);
+  const showMsg = (m, t = 'success') => {
+    if (t === 'success') {
+      setSuccessMessage(m);
       setTimeout(() => setSuccessMessage(null), 3000);
     } else {
-      setErrorMessage(message);
+      setErrorMessage(m);
       setTimeout(() => setErrorMessage(null), 3000);
     }
   };
-
-  const handleRefresh = useCallback(
-    () => setRefreshTrigger((prev) => prev + 1),
-    []
-  );
-
-  const toggleBatch = (batchKey) =>
-    setExpandedBatches((prev) => ({ ...prev, [batchKey]: !prev[batchKey] }));
-
+  const handleRefresh = () => setRefreshTrigger((p) => p + 1);
+  const toggleBatch = (k) => setExpandedBatches((p) => ({ ...p, [k]: !p[k] }));
   const toggleAllBatches = () => {
-    const newExpandAll = !expandAll;
-    setExpandAll(newExpandAll);
-    const newExpanded = {};
-    Object.keys(groupedClassrooms).forEach((key) => {
-      newExpanded[key] = newExpandAll;
+    const n = !expandAll;
+    setExpandAll(n);
+    const ne = {};
+    Object.keys(groupedClassrooms).forEach((k) => {
+      ne[k] = n;
     });
-    setExpandedBatches(newExpanded);
+    setExpandedBatches(ne);
   };
+  const toggleShowArchived = (batchKey) =>
+    setShowArchivedMap((p) => ({ ...p, [batchKey]: !p[batchKey] }));
 
-  // Open delete confirmation modal
-  const openDeleteModal = (classroomId, classroomName) => {
-    if (!hasDeletePermission) {
-      showMessage("You don't have permission to delete classrooms", 'error');
+  const openDeleteModal = (id, name) => {
+    if (!hasDelete) {
+      showMsg('No permission', 'error');
       return;
     }
-    setDeleteModal({
-      isOpen: true,
-      classroomId,
-      classroomName,
-    });
+    setDeleteModal({ isOpen: true, classroomId: id, classroomName: name });
   };
-
-  // Close delete confirmation modal
   const closeDeleteModal = () => {
-    if (!isDeleting) {
+    if (!isDeleting)
       setDeleteModal({ isOpen: false, classroomId: null, classroomName: '' });
-    }
   };
-
-  // Confirm and execute delete
   const confirmDelete = async () => {
     if (!deleteModal.classroomId) return;
-
     setIsDeleting(true);
     try {
-      const url = `/api/classrooms/${deleteModal.classroomId}`;
-      const response = await fetch(url, {
+      const r = await fetch(`/api/classrooms/${deleteModal.classroomId}`, {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to delete classroom';
+      if (!r.ok) {
+        let e = 'Failed';
         try {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errorData = await response.json();
-            errorMessage =
-              errorData?.error || errorData?.message || errorMessage;
-          } else {
-            errorMessage = `Server error: ${response.status} ${response.statusText}`;
-          }
-        } catch (e) {
-          console.error('Error parsing error response:', e);
-        }
-        throw new Error(errorMessage);
+          const d = await r.json();
+          e = d?.error || d?.message || e;
+        } catch {}
+        throw new Error(e);
       }
-
-      let result = null;
-      try {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          result = await response.json();
-        }
-      } catch (e) {
-        console.error('Error parsing success response:', e);
-      }
-
-      showMessage(
-        result?.message ||
-          `Classroom "${deleteModal.classroomName}" deleted successfully!`,
-        'success'
-      );
-
+      showMsg('Deleted!', 'success');
       setDeleteModal({ isOpen: false, classroomId: null, classroomName: '' });
       handleRefresh();
     } catch (err) {
-      console.error('Error deleting classroom:', err);
-      showMessage(err.message || 'An unexpected error occurred', 'error');
+      showMsg(err.message, 'error');
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const handleCreateClassroom = async (formData) => {
-    if (editingClassroom && !hasUpdatePermission) {
-      showMessage("You don't have permission to update classrooms", 'error');
-      return;
-    }
-    if (!editingClassroom && !hasCreatePermission) {
-      showMessage("You don't have permission to create classrooms", 'error');
-      return;
-    }
-
+  const handleSave = async (fd) => {
+    setFormLoading(true);
     try {
-      setFormLoading(true);
-
       const url = editingClassroom
         ? `/api/classrooms/${editingClassroom.id}`
         : '/api/classrooms';
-
-      const method = editingClassroom ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method: method,
-        body: formData,
+      const r = await fetch(url, {
+        method: editingClassroom ? 'PUT' : 'POST',
+        body: fd,
       });
-
-      if (!response.ok) {
-        let errorMessage = editingClassroom
-          ? 'Failed to update classroom'
-          : 'Failed to create classroom';
-
+      if (!r.ok) {
+        let e = 'Failed';
         try {
-          const contentType = response.headers.get('content-type');
-          if (contentType && contentType.includes('application/json')) {
-            const errorData = await response.json();
-            errorMessage =
-              errorData?.error || errorData?.message || errorMessage;
-          } else {
-            errorMessage = `Server error: ${response.status} ${response.statusText}`;
-          }
-        } catch (parseError) {
-          console.error('Error parsing error response:', parseError);
-        }
-        throw new Error(errorMessage);
+          const d = await r.json();
+          e = d?.error || d?.message || e;
+        } catch {}
+        throw new Error(e);
       }
-
-      let result;
-      try {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          result = await response.json();
-        }
-      } catch (parseError) {
-        console.error('Error parsing success response:', parseError);
-      }
-
-      showMessage(
-        result?.message ||
-          (editingClassroom
-            ? 'Classroom updated successfully!'
-            : 'Classroom created successfully!'),
-        'success'
-      );
-
+      showMsg(editingClassroom ? 'Updated!' : 'Created!', 'success');
       setIsFormModalOpen(false);
       setEditingClassroom(null);
       handleRefresh();
     } catch (err) {
-      console.error('Error saving classroom:', err);
-      showMessage(err.message || 'An unexpected error occurred', 'error');
+      showMsg(err.message, 'error');
     } finally {
       setFormLoading(false);
     }
   };
 
-  const filteredBatches = Object.entries(groupedClassrooms).filter(
-    ([, data]) => {
-      const batchName = data.batch?.name?.toLowerCase() || '';
-      const searchLower = searchTerm.toLowerCase();
-      const matchesSearch =
-        !searchTerm ||
-        batchName.includes(searchLower) ||
-        data.classrooms.some(
-          (c) =>
-            c.name?.toLowerCase().includes(searchLower) ||
-            c.course?.name?.toLowerCase().includes(searchLower) ||
-            c.course?.code?.toLowerCase().includes(searchLower)
-        );
-      const matchesStatus =
-        statusFilter === 'all' ||
-        (statusFilter === 'active' && data.batch?.status === 'active') ||
-        (statusFilter === 'inactive' && data.batch?.status !== 'active');
-      return matchesSearch && matchesStatus;
-    }
-  );
-
-  const getBatchStudentCount = (batchKey, batchId) => {
-    if (batchStudentCounts[batchId] !== undefined)
-      return batchStudentCounts[batchId];
-    const data = groupedClassrooms[batchKey];
-    if (!data) return 0;
-    return data.classrooms.reduce(
-      (sum, c) => sum + (c._count?.enrollments || 0),
-      0
+  // Helper: determine effective batch status based on its classrooms
+  const getEffectiveBatchStatus = (batchData) => {
+    const batchStatus = batchData.batch?.status || 'active';
+    const classrooms = batchData.classrooms || [];
+    const hasActiveClassrooms = classrooms.some(
+      (c) => !c.status || c.status === 'active'
     );
+    // If batch is active but has no active classrooms, treat as inactive
+    if (
+      batchStatus === 'active' &&
+      classrooms.length > 0 &&
+      !hasActiveClassrooms
+    ) {
+      return 'inactive';
+    }
+    return batchStatus;
   };
 
+  // Filter batches by effective status (active/inactive/all) AND search term
+  const filteredBatches = Object.entries(groupedClassrooms).filter(([, d]) => {
+    const bn = d.batch?.name?.toLowerCase() || '';
+    const sl = searchTerm.toLowerCase();
+    const matchesSearch =
+      !searchTerm ||
+      bn.includes(sl) ||
+      d.classrooms.some(
+        (c) =>
+          c.name?.toLowerCase().includes(sl) ||
+          c.course?.name?.toLowerCase().includes(sl)
+      );
+
+    const effectiveStatus = getEffectiveBatchStatus(d);
+    const matchesBatchStatus =
+      batchStatusFilter === 'all' ||
+      (batchStatusFilter === 'active' && effectiveStatus === 'active') ||
+      (batchStatusFilter === 'inactive' && effectiveStatus !== 'active');
+
+    return matchesSearch && matchesBatchStatus;
+  });
+
+  const getStudentCount = (bk, bid) =>
+    batchStudentCounts[bid] !== undefined
+      ? batchStudentCounts[bid]
+      : groupedClassrooms[bk]?.classrooms?.reduce(
+          (s, c) => s + (c._count?.enrollments || 0),
+          0
+        ) || 0;
   const totalStudents = useMemo(
-    () =>
-      Object.values(batchStudentCounts).reduce((sum, count) => sum + count, 0),
+    () => Object.values(batchStudentCounts).reduce((s, c) => s + c, 0),
     [batchStudentCounts]
+  );
+
+  // Compute stats based on effective status
+  const allBatches = Object.keys(groupedClassrooms).length;
+  const activeBatches = Object.entries(groupedClassrooms).filter(
+    ([, d]) => getEffectiveBatchStatus(d) === 'active'
+  ).length;
+  const inactiveBatches = allBatches - activeBatches;
+
+  const totalActiveClassrooms = Object.values(groupedClassrooms).reduce(
+    (s, d) =>
+      s + d.classrooms.filter((c) => !c.status || c.status === 'active').length,
+    0
   );
 
   if (permissionsLoading)
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="max-w-7xl mx-auto p-6">
           <LoadingState />
         </div>
       </div>
     );
-
-  if (!hasReadPermission)
+  if (!hasRead)
     return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center">
-            <Icons.Lock size={32} className="text-red-600 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-red-800 mb-2">
-              Access Denied
-            </h2>
-            <p className="text-red-600">
-              You don't have permission to view classrooms.
-            </p>
-          </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center max-w-md">
+          <Icons.Lock size={32} className="text-red-600 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-red-800">Access Denied</h2>
+          <p className="text-red-600">No permission.</p>
         </div>
       </div>
     );
 
-  const totalBatches = Object.keys(groupedClassrooms).length;
-  const totalClassrooms = Object.values(groupedClassrooms).reduce(
-    (sum, d) => sum + d.classrooms.length,
-    0
-  );
-
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Success/Error Messages */}
       <AnimatePresence>
         {successMessage && (
           <motion.div
@@ -965,7 +870,7 @@ export default function ClassroomPage() {
           >
             <div className="flex items-center gap-2">
               <Icons.CheckCircle size={20} className="text-green-500" />
-              <span className="font-medium">{successMessage}</span>
+              <span>{successMessage}</span>
               <button
                 onClick={() => setSuccessMessage(null)}
                 className="ml-auto"
@@ -984,7 +889,7 @@ export default function ClassroomPage() {
           >
             <div className="flex items-center gap-2">
               <Icons.AlertCircle size={20} className="text-red-500" />
-              <span className="font-medium">{errorMessage}</span>
+              <span>{errorMessage}</span>
               <button onClick={() => setErrorMessage(null)} className="ml-auto">
                 <Icons.X size={16} />
               </button>
@@ -993,110 +898,115 @@ export default function ClassroomPage() {
         )}
       </AnimatePresence>
 
-      {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={deleteModal.isOpen}
         onClose={closeDeleteModal}
         onConfirm={confirmDelete}
         title="Delete Classroom"
-        message={`Are you sure you want to delete "${deleteModal.classroomName}"? This action cannot be undone and will remove all associated data including enrollments, attendance records, and sessions.`}
+        message={`Delete "${deleteModal.classroomName}"?`}
         loading={isDeleting}
       />
 
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="py-4">
-            <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-              <span>🏠</span>
-              <span>/</span>
-              <span className="text-gray-900">Classroom Management</span>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+            <span>🏠</span>
+            <span>/</span>
+            <span className="text-gray-900">Classroom Management</span>
+          </div>
+          <div className="flex justify-between items-center flex-wrap gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Classroom Management
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                {totalActiveClassrooms} active classrooms across {activeBatches}{' '}
+                active batches
+              </p>
             </div>
-            <div className="flex justify-between items-center flex-wrap gap-4">
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Classroom Management
-                </h1>
-                <p className="text-sm text-gray-500 mt-1">
-                  Grouped by batch with academic calendar & routine management
-                </p>
-              </div>
-              <div className="flex gap-3 flex-wrap">
+            <div className="flex gap-3 flex-wrap">
+              <button
+                onClick={handleRefresh}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
+              >
+                <Icons.RefreshCw size={18} /> Refresh
+              </button>
+              <button
+                onClick={() => handleOpenCalendar(null, null)}
+                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
+              >
+                <Icons.CalendarDays size={18} /> Calendar
+              </button>
+              <button
+                onClick={() => handleOpenRoutine(null, null)}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+              >
+                <Clock size={18} /> Routine
+              </button>
+              <button
+                onClick={() => setShowELibrary(true)}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+              >
+                <Library size={18} /> E-Library
+              </button>
+              <button
+                onClick={() => setShowAttendanceReport(true)}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+              >
+                <Icons.BarChart3 size={18} /> Report
+              </button>
+              {hasCreate && (
                 <button
-                  onClick={handleRefresh}
-                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
+                  onClick={() => {
+                    setEditingClassroom(null);
+                    setIsFormModalOpen(true);
+                  }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
                 >
-                  <Icons.RefreshCw size={18} /> Refresh
+                  <Icons.Plus size={18} /> Add
                 </button>
-                <button
-                  onClick={() => handleOpenCalendar(null, null)}
-                  className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
-                >
-                  <Icons.CalendarDays size={18} /> Global Calendar
-                </button>
-                <button
-                  onClick={() => handleOpenRoutine(null, null)}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
-                >
-                  <Clock size={18} /> Routine Manager
-                </button>
-                <button
-                  onClick={() => setShowELibrary(true)}
-                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
-                >
-                  <Library size={18} /> E-Library
-                </button>
-                <button
-                  onClick={() => setShowAttendanceReport(true)}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
-                >
-                  <Icons.BarChart3 size={18} /> Global Report
-                </button>
-                {hasCreatePermission && (
-                  <button
-                    onClick={() => {
-                      setEditingClassroom(null);
-                      setIsFormModalOpen(true);
-                    }}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
-                  >
-                    <Icons.Plus size={18} /> Add Classroom
-                  </button>
-                )}
-                <div className="bg-indigo-50 rounded-lg px-4 py-2 flex items-center gap-2">
-                  <Calendar size={16} className="text-indigo-600" />
-                  <span className="text-sm text-gray-600">
-                    {new Date().toLocaleDateString('en-US', {
-                      weekday: 'long',
-                      month: 'long',
-                      day: 'numeric',
-                    })}
-                  </span>
-                </div>
+              )}
+              <div className="bg-indigo-50 rounded-lg px-4 py-2 flex items-center gap-2">
+                <Calendar size={16} className="text-indigo-600" />
+                <span className="text-sm text-gray-600">
+                  {new Date().toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    month: 'long',
+                    day: 'numeric',
+                  })}
+                </span>
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Stats Cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-4 gap-4">
           {[
             {
               icon: Icons.Layers,
               color: 'bg-indigo-100 text-indigo-600',
-              label: 'Total Batches',
-              value: totalBatches,
+              label: 'Active Batches',
+              value: activeBatches,
+            },
+            {
+              icon: Icons.Archive,
+              color: 'bg-gray-100 text-gray-600',
+              label: 'Inactive Batches',
+              value: inactiveBatches,
             },
             {
               icon: Icons.BookOpen,
               color: 'bg-blue-100 text-blue-600',
-              label: 'Total Classrooms',
-              value: totalClassrooms,
+              label: 'Active Classrooms',
+              value: totalActiveClassrooms,
             },
             {
               icon: Icons.Users,
               color: 'bg-green-100 text-green-600',
-              label: 'Total Active Students',
+              label: 'Total Students',
               value: totalStudents,
             },
           ].map((s, i) => (
@@ -1119,6 +1029,7 @@ export default function ClassroomPage() {
         </div>
       </div>
 
+      {/* Search & Filter Bar */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4">
         <div className="bg-white rounded-lg p-4 shadow-sm flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-3">
@@ -1135,15 +1046,43 @@ export default function ClassroomPage() {
                 className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg w-64 focus:ring-2 focus:ring-indigo-500 text-sm"
               />
             </div>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            >
-              <option value="all">All Batches</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+
+            {/* Batch Status Filter */}
+            <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setBatchStatusFilter('active')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  batchStatusFilter === 'active'
+                    ? 'bg-green-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <Icons.CheckCircle size={12} className="inline mr-1" />
+                Active ({activeBatches})
+              </button>
+              <button
+                onClick={() => setBatchStatusFilter('inactive')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  batchStatusFilter === 'inactive'
+                    ? 'bg-gray-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <Icons.Archive size={12} className="inline mr-1" />
+                Inactive ({inactiveBatches})
+              </button>
+              <button
+                onClick={() => setBatchStatusFilter('all')}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  batchStatusFilter === 'all'
+                    ? 'bg-indigo-500 text-white shadow-sm'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <Icons.Layers size={12} className="inline mr-1" />
+                All ({allBatches})
+              </button>
+            </div>
           </div>
           <button
             onClick={toggleAllBatches}
@@ -1159,14 +1098,21 @@ export default function ClassroomPage() {
         </div>
       </div>
 
+      {/* Classroom List */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
         {loading ? (
           <LoadingState />
         ) : filteredBatches.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm p-12 text-center">
             <Icons.BookOpen size={48} className="text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">No classrooms found</p>
-            {hasCreatePermission && (
+            <p className="text-gray-500">
+              {batchStatusFilter === 'active'
+                ? 'No active batches found'
+                : batchStatusFilter === 'inactive'
+                ? 'No inactive batches found'
+                : 'No batches found'}
+            </p>
+            {hasCreate && (
               <button
                 onClick={() => {
                   setEditingClassroom(null);
@@ -1180,24 +1126,26 @@ export default function ClassroomPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {filteredBatches.map(([batchKey, data]) => (
+            {filteredBatches.map(([bk, data]) => (
               <BatchAccordion
-                key={batchKey}
+                key={bk}
                 batch={data.batch}
                 classrooms={data.classrooms}
-                isExpanded={!!expandedBatches[batchKey]}
-                onToggle={() => toggleBatch(batchKey)}
-                onEdit={(classroom) => {
-                  setEditingClassroom(classroom);
+                isExpanded={!!expandedBatches[bk]}
+                onToggle={() => toggleBatch(bk)}
+                onEdit={(c) => {
+                  setEditingClassroom(c);
                   setIsFormModalOpen(true);
                 }}
                 onDelete={openDeleteModal}
                 onOpenCalendar={handleOpenCalendar}
                 onOpenRoutine={handleOpenRoutine}
-                onOpenBatchReport={handleOpenBatchReport} // ADDED
-                hasUpdatePermission={hasUpdatePermission}
-                hasDeletePermission={hasDeletePermission}
-                studentCount={getBatchStudentCount(batchKey, data.batch.id)}
+                onOpenBatchReport={handleOpenBatchReport}
+                hasUpdatePermission={hasUpdate}
+                hasDeletePermission={hasDelete}
+                studentCount={getStudentCount(bk, data.batch.id)}
+                showArchived={!!showArchivedMap[bk]}
+                onToggleArchive={() => toggleShowArchived(bk)}
               />
             ))}
           </div>
@@ -1210,40 +1158,27 @@ export default function ClassroomPage() {
           setIsFormModalOpen(false);
           setEditingClassroom(null);
         }}
-        onSubmit={handleCreateClassroom}
+        onSubmit={handleSave}
         initialData={editingClassroom}
         loading={formLoading}
       />
 
-      {/* Global Attendance Report (no pre-selected batch) */}
       <AnimatePresence>
         {showAttendanceReport && (
           <AttendanceSummaryReport
             onClose={() => setShowAttendanceReport(false)}
           />
         )}
-      </AnimatePresence>
-
-      {/* Batch-Specific Attendance Report with Semester Dates */}
-      <AnimatePresence>
         {showBatchReport && batchReportData.batchId && (
           <AttendanceReportWithSemesterDates
             onClose={() => {
               setShowBatchReport(false);
-              setBatchReportData({
-                batchId: null,
-                batchName: '',
-                academicYear: '',
-              });
+              setBatchReportData({ batchId: null, batchName: '' });
             }}
             batchId={batchReportData.batchId}
             batchName={batchReportData.batchName}
-            academicYear={batchReportData.academicYear}
           />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {showAcademicCalendar && (
           <AcademicCalendar3D
             classroomId={calendarClassroomId}
@@ -1252,9 +1187,6 @@ export default function ClassroomPage() {
             onClose={() => setShowAcademicCalendar(false)}
           />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {showRoutineManager && (
           <RoutineManager3D
             classroomId={routineClassroomId}
@@ -1263,9 +1195,6 @@ export default function ClassroomPage() {
             onClose={() => setShowRoutineManager(false)}
           />
         )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {showELibrary && (
           <ELibrarySearch
             isOpen={showELibrary}

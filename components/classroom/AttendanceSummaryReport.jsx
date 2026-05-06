@@ -767,7 +767,7 @@ export default function AttendanceSummaryReport({
 
         {/* Footer */}
         {attendanceData && filteredStudentReport.length > 0 && (
-          <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
+          <div className="px-6 bg-gray-50 border-t border-gray-200 flex justify-between items-center">
             <div className="text-sm text-gray-600">
               Showing {filteredStudentReport.length} student
               {filteredStudentReport.length !== 1 ? 's' : ''}

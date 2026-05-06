@@ -258,6 +258,7 @@ model Classroom {
   facultyId       Int?
   batchId         Int?
   departmentId    Int?
+  status          String?           @default("active")
   
   course          Course?          @relation(fields: [courseId], references: [id])
   faculty         Faculty?         @relation(fields: [facultyId], references: [id])
