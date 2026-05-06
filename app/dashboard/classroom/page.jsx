@@ -141,7 +141,7 @@ const BatchAccordion = ({
             onToggle();
           }
         }}
-        className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors cursor-pointer"
+        className="w-full px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors "
       >
         <div className="flex items-center gap-4">
           <motion.div
@@ -206,7 +206,7 @@ const BatchAccordion = ({
               e.stopPropagation();
               onOpenBatchReport(batch.id, batch.name);
             }}
-            className="px-3 py-1.5 text-xs bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex items-center gap-1.5 transition-colors"
+            className="cursor-pointer px-3 py-1.5 text-xs bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 flex items-center gap-1.5 transition-colors"
             title="View Batch Attendance Report"
           >
             <Icons.BarChart3 size={14} /> Report
@@ -216,7 +216,7 @@ const BatchAccordion = ({
               e.stopPropagation();
               onOpenCalendar(null, batch.id);
             }}
-            className="px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 flex items-center gap-1.5 transition-colors"
+            className="cursor-pointer px-3 py-1.5 text-xs bg-amber-100 text-amber-700 rounded-lg hover:bg-amber-200 flex items-center gap-1.5 transition-colors"
             title="Open Batch Calendar"
           >
             <Icons.CalendarDays size={14} /> Calendar
@@ -226,7 +226,7 @@ const BatchAccordion = ({
               e.stopPropagation();
               onOpenRoutine(null, batch.id);
             }}
-            className="px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1.5 transition-colors"
+            className="cursor-pointer px-3 py-1.5 text-xs bg-green-100 text-green-700 rounded-lg hover:bg-green-200 flex items-center gap-1.5 transition-colors"
             title="Open Batch Routine"
           >
             <Clock size={14} /> Routine
@@ -927,31 +927,31 @@ export default function ClassroomPage() {
             <div className="flex gap-3 flex-wrap">
               <button
                 onClick={handleRefresh}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
+                className="cursor-pointer px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
               >
                 <Icons.RefreshCw size={18} /> Refresh
               </button>
               <button
                 onClick={() => handleOpenCalendar(null, null)}
-                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
+                className="cursor-pointer px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
               >
                 <Icons.CalendarDays size={18} /> Calendar
               </button>
               <button
                 onClick={() => handleOpenRoutine(null, null)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
+                className="cursor-pointer px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2"
               >
                 <Clock size={18} /> Routine
               </button>
               <button
                 onClick={() => setShowELibrary(true)}
-                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
+                className="cursor-pointer px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 flex items-center gap-2"
               >
                 <Library size={18} /> E-Library
               </button>
               <button
                 onClick={() => setShowAttendanceReport(true)}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
+                className="cursor-pointer px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-2"
               >
                 <Icons.BarChart3 size={18} /> Report
               </button>
@@ -961,9 +961,9 @@ export default function ClassroomPage() {
                     setEditingClassroom(null);
                     setIsFormModalOpen(true);
                   }}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+                  className="cursor-pointer px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
                 >
-                  <Icons.Plus size={18} /> Add
+                  <Icons.Plus size={18} /> Add Classroom
                 </button>
               )}
               <div className="bg-indigo-50 rounded-lg px-4 py-2 flex items-center gap-2">
@@ -1051,7 +1051,7 @@ export default function ClassroomPage() {
             <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setBatchStatusFilter('active')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                className={`cursor-pointer px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   batchStatusFilter === 'active'
                     ? 'bg-green-500 text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-800'
@@ -1062,7 +1062,7 @@ export default function ClassroomPage() {
               </button>
               <button
                 onClick={() => setBatchStatusFilter('inactive')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                className={`cursor-pointer px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   batchStatusFilter === 'inactive'
                     ? 'bg-gray-500 text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-800'
@@ -1073,7 +1073,7 @@ export default function ClassroomPage() {
               </button>
               <button
                 onClick={() => setBatchStatusFilter('all')}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                className={`cursor-pointer px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
                   batchStatusFilter === 'all'
                     ? 'bg-indigo-500 text-white shadow-sm'
                     : 'text-gray-600 hover:text-gray-800'
@@ -1205,3 +1205,42 @@ export default function ClassroomPage() {
     </div>
   );
 }
+<style jsx global>{`
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  [role='button'] {
+    cursor: pointer;
+  }
+  a {
+    cursor: pointer;
+  }
+  input[type='text'],
+  input[type='number'],
+  input[type='date'],
+  input[type='search'],
+  select,
+  textarea {
+    cursor: text;
+  }
+  input[type='text']:disabled,
+  input[type='number']:disabled,
+  input[type='date']:disabled,
+  input[type='search']:disabled,
+  select:disabled,
+  textarea:disabled {
+    cursor: not-allowed;
+  }
+  input[type='date'] {
+    cursor: pointer;
+  }
+  .cursor-pointer {
+    cursor: pointer;
+  }
+  .cursor-not-allowed {
+    cursor: not-allowed;
+  }
+`}</style>;
