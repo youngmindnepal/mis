@@ -23,25 +23,26 @@ import {
   ChevronRight,
   Coffee,
   ChevronDown,
+  Settings,
 } from 'lucide-react';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
-const TIME_SLOTS = [
-  { id: 0, display: '07:01-07:30' },
-  { id: 1, display: '07:31-08:00' },
-  { id: 2, display: '08:01-08:30' },
-  { id: 3, display: '08:31-09:00' },
-  { id: 4, display: '09:01-09:30' },
-  { id: 5, display: '09:31-10:00' },
-  { id: 6, display: '10:01-10:30' },
-  { id: 7, display: '10:31-11:00' },
-  { id: 8, display: '11:01-11:30' },
-  { id: 9, display: '11:31-12:00' },
-  { id: 10, display: '12:01-12:30' },
-  { id: 11, display: '12:31-01:00' },
-  { id: 12, display: '01:01-01:30' },
-  { id: 13, display: '01:31-02:00' },
+const DEFAULT_TIME_SLOTS = [
+  { id: 0, start: '07:01', end: '07:30', display: '07:01-07:30' },
+  { id: 1, start: '07:31', end: '08:00', display: '07:31-08:00' },
+  { id: 2, start: '08:01', end: '08:30', display: '08:01-08:30' },
+  { id: 3, start: '08:31', end: '09:00', display: '08:31-09:00' },
+  { id: 4, start: '09:01', end: '09:30', display: '09:01-09:30' },
+  { id: 5, start: '09:31', end: '10:00', display: '09:31-10:00' },
+  { id: 6, start: '10:01', end: '10:30', display: '10:01-10:30' },
+  { id: 7, start: '10:31', end: '11:00', display: '10:31-11:00' },
+  { id: 8, start: '11:01', end: '11:30', display: '11:01-11:30' },
+  { id: 9, start: '11:31', end: '12:00', display: '11:31-12:00' },
+  { id: 10, start: '12:01', end: '12:30', display: '12:01-12:30' },
+  { id: 11, start: '12:31', end: '13:00', display: '12:31-01:00' },
+  { id: 12, start: '13:01', end: '13:30', display: '01:01-01:30' },
+  { id: 13, start: '13:31', end: '14:00', display: '01:31-02:00' },
 ];
 
 const STATUS_STYLES = {
@@ -112,123 +113,105 @@ const CONFLICT_TYPES = {
   },
 };
 
-// ==================== COURSE COLOR PALETTE ====================
 const COURSE_COLORS = [
   {
     bg: 'bg-blue-100',
     text: 'text-blue-800',
     border: 'border-blue-300',
     printBg: '#dbeafe',
-    printText: '#1e40af',
   },
   {
     bg: 'bg-emerald-100',
     text: 'text-emerald-800',
     border: 'border-emerald-300',
     printBg: '#d1fae5',
-    printText: '#065f46',
   },
   {
     bg: 'bg-purple-100',
     text: 'text-purple-800',
     border: 'border-purple-300',
     printBg: '#ede9fe',
-    printText: '#5b21b6',
   },
   {
     bg: 'bg-amber-100',
     text: 'text-amber-800',
     border: 'border-amber-300',
     printBg: '#fef3c7',
-    printText: '#92400e',
   },
   {
     bg: 'bg-rose-100',
     text: 'text-rose-800',
     border: 'border-rose-300',
     printBg: '#ffe4e6',
-    printText: '#9f1239',
   },
   {
     bg: 'bg-cyan-100',
     text: 'text-cyan-800',
     border: 'border-cyan-300',
     printBg: '#cffafe',
-    printText: '#155e75',
   },
   {
     bg: 'bg-orange-100',
     text: 'text-orange-800',
     border: 'border-orange-300',
     printBg: '#ffedd5',
-    printText: '#9a3412',
   },
   {
     bg: 'bg-teal-100',
     text: 'text-teal-800',
     border: 'border-teal-300',
     printBg: '#ccfbf1',
-    printText: '#115e59',
   },
   {
     bg: 'bg-pink-100',
     text: 'text-pink-800',
     border: 'border-pink-300',
     printBg: '#fce7f3',
-    printText: '#9d174d',
   },
   {
     bg: 'bg-lime-100',
     text: 'text-lime-800',
     border: 'border-lime-300',
     printBg: '#ecfccb',
-    printText: '#3f6212',
   },
   {
     bg: 'bg-indigo-100',
     text: 'text-indigo-800',
     border: 'border-indigo-300',
     printBg: '#e0e7ff',
-    printText: '#3730a3',
   },
   {
     bg: 'bg-fuchsia-100',
     text: 'text-fuchsia-800',
     border: 'border-fuchsia-300',
     printBg: '#fae8ff',
-    printText: '#86198f',
   },
   {
     bg: 'bg-violet-100',
     text: 'text-violet-800',
     border: 'border-violet-300',
     printBg: '#ede9fe',
-    printText: '#5b21b6',
   },
   {
     bg: 'bg-sky-100',
     text: 'text-sky-800',
     border: 'border-sky-300',
     printBg: '#e0f2fe',
-    printText: '#075985',
   },
   {
     bg: 'bg-red-100',
     text: 'text-red-800',
     border: 'border-red-300',
     printBg: '#fee2e2',
-    printText: '#991b1b',
   },
   {
     bg: 'bg-green-100',
     text: 'text-green-800',
     border: 'border-green-300',
     printBg: '#dcfce7',
-    printText: '#166534',
   },
 ];
 
-// Hash function for consistent color assignment
 const getCourseColor = (subject) => {
   if (!subject) return COURSE_COLORS[0];
   let hash = 0;
@@ -283,7 +266,7 @@ function SearchableDropdown({
           setSearch('');
         }}
         disabled={disabled}
-        className={`w-full rounded-lg border px-3 py-2 text-sm text-left flex items-center justify-between ${
+        className={`w-full rounded-lg border px-3 py-2 text-sm text-left flex items-center justify-between cursor-pointer ${
           disabled
             ? 'bg-gray-100 cursor-not-allowed'
             : 'hover:border-indigo-400'
@@ -333,7 +316,7 @@ function SearchableDropdown({
                     setIsOpen(false);
                     setSearch('');
                   }}
-                  className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-colors ${
+                  className={`w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-colors cursor-pointer ${
                     String(o[valueKey]) === String(value)
                       ? 'bg-indigo-100 font-medium'
                       : ''
@@ -363,6 +346,277 @@ function SearchableDropdown({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ==================== TIME SLOT CONFIGURATION MODAL ====================
+function TimeSlotConfigModal({
+  isOpen,
+  onClose,
+  timeSlots,
+  onSave,
+  batchId,
+  applyGlobal,
+}) {
+  const [startHour, setStartHour] = useState('07');
+  const [startMin, setStartMin] = useState('01');
+  const [endHour, setEndHour] = useState('14');
+  const [endMin, setEndMin] = useState('00');
+  const [interval, setInterval] = useState(30);
+  const [slots, setSlots] = useState([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (timeSlots.length > 0) {
+        const [sh, sm] = timeSlots[0].start.split(':').map(Number);
+        const [eh, em] = timeSlots[timeSlots.length - 1].end
+          .split(':')
+          .map(Number);
+        setStartHour(sh.toString().padStart(2, '0'));
+        setStartMin(sm.toString().padStart(2, '0'));
+        setEndHour(eh.toString().padStart(2, '0'));
+        setEndMin(em.toString().padStart(2, '0'));
+        generateSlots(sh, sm, eh, em, 30);
+      }
+    }
+  }, [isOpen, timeSlots]);
+
+  const generateSlots = (sh, sm, eh, em, int) => {
+    const startMinutes = sh * 60 + sm;
+    const endMinutes = eh * 60 + em;
+    const totalSlots = Math.floor((endMinutes - startMinutes) / int);
+    const newSlots = [];
+    for (let i = 0; i < totalSlots; i++) {
+      const slotStart = startMinutes + i * int;
+      const slotEnd = slotStart + int;
+      const sH = Math.floor(slotStart / 60)
+        .toString()
+        .padStart(2, '0');
+      const sM = (slotStart % 60).toString().padStart(2, '0');
+      const eH = Math.floor(slotEnd / 60)
+        .toString()
+        .padStart(2, '0');
+      const eM = (slotEnd % 60).toString().padStart(2, '0');
+      newSlots.push({
+        id: i,
+        start: `${sH}:${sM}`,
+        end: `${eH}:${eM}`,
+        display: `${sH}:${sM}-${eH}:${eM}`,
+      });
+    }
+    setSlots(newSlots);
+  };
+
+  const handleStartHChange = (val) => {
+    const v = parseInt(val) || 0;
+    setStartHour(Math.min(23, Math.max(0, v)).toString().padStart(2, '0'));
+    generateSlots(
+      parseInt(val) || 0,
+      parseInt(startMin),
+      parseInt(endHour),
+      parseInt(endMin),
+      interval
+    );
+  };
+  const handleStartMChange = (val) => {
+    const v = parseInt(val) || 0;
+    setStartMin(Math.min(59, Math.max(0, v)).toString().padStart(2, '0'));
+    generateSlots(
+      parseInt(startHour),
+      parseInt(val) || 0,
+      parseInt(endHour),
+      parseInt(endMin),
+      interval
+    );
+  };
+  const handleEndHChange = (val) => {
+    const v = parseInt(val) || 0;
+    setEndHour(Math.min(23, Math.max(0, v)).toString().padStart(2, '0'));
+    generateSlots(
+      parseInt(startHour),
+      parseInt(startMin),
+      parseInt(val) || 0,
+      parseInt(endMin),
+      interval
+    );
+  };
+  const handleEndMChange = (val) => {
+    const v = parseInt(val) || 0;
+    setEndMin(Math.min(59, Math.max(0, v)).toString().padStart(2, '0'));
+    generateSlots(
+      parseInt(startHour),
+      parseInt(startMin),
+      parseInt(endHour),
+      parseInt(val) || 0,
+      interval
+    );
+  };
+  const handleIntervalChange = (val) => {
+    const v = parseInt(val) || 30;
+    const iv = Math.min(120, Math.max(5, v));
+    setInterval(iv);
+    generateSlots(
+      parseInt(startHour),
+      parseInt(startMin),
+      parseInt(endHour),
+      parseInt(endMin),
+      iv
+    );
+  };
+
+  const handleSave = () => {
+    const config = {
+      startTime: `${startHour}:${startMin}`,
+      endTime: `${endHour}:${endMin}`,
+      interval,
+    };
+    onSave(slots, config, applyGlobal);
+    onClose();
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center print:hidden">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full p-6 mx-4"
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <Settings size={20} /> Time Slot Configuration
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold mb-2">
+                Start Time (HH:MM)
+              </label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={startHour}
+                  onChange={(e) => handleStartHChange(e.target.value)}
+                  min={0}
+                  max={23}
+                  className="w-16 rounded-lg border px-2 py-2 text-sm text-center"
+                  placeholder="HH"
+                />
+                <span className="text-gray-400 font-bold">:</span>
+                <input
+                  type="number"
+                  value={startMin}
+                  onChange={(e) => handleStartMChange(e.target.value)}
+                  min={0}
+                  max={59}
+                  className="w-16 rounded-lg border px-2 py-2 text-sm text-center"
+                  placeholder="MM"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-2">
+                End Time (HH:MM)
+              </label>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  value={endHour}
+                  onChange={(e) => handleEndHChange(e.target.value)}
+                  min={0}
+                  max={23}
+                  className="w-16 rounded-lg border px-2 py-2 text-sm text-center"
+                  placeholder="HH"
+                />
+                <span className="text-gray-400 font-bold">:</span>
+                <input
+                  type="number"
+                  value={endMin}
+                  onChange={(e) => handleEndMChange(e.target.value)}
+                  min={0}
+                  max={59}
+                  className="w-16 rounded-lg border px-2 py-2 text-sm text-center"
+                  placeholder="MM"
+                />
+              </div>
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-2">
+              Interval (minutes)
+            </label>
+            <input
+              type="number"
+              value={interval}
+              onChange={(e) => handleIntervalChange(e.target.value)}
+              min={5}
+              max={120}
+              step={5}
+              className="w-24 rounded-lg border px-3 py-2 text-sm text-center"
+            />
+          </div>
+          {slots.length > 0 && (
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-gray-600">
+                  {slots.length} slots generated
+                </span>
+                <span className="text-xs text-gray-400">
+                  {slots[0]?.display} – {slots[slots.length - 1]?.display}
+                </span>
+              </div>
+              <div className="max-h-40 overflow-y-auto border rounded-lg">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="p-2 text-left">#</th>
+                      <th className="p-2 text-left">Start</th>
+                      <th className="p-2 text-left">End</th>
+                      <th className="p-2 text-left">Display</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slots.map((s, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="p-2">{i}</td>
+                        <td className="p-2">{s.start}</td>
+                        <td className="p-2">{s.end}</td>
+                        <td className="p-2 text-gray-500">{s.display}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+        <div className="flex justify-end gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={slots.length === 0}
+            className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+          >
+            <Save size={14} /> Save Configuration
+          </button>
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -397,6 +651,14 @@ export default function RoutineManager3D({
   const [conflicts, setConflicts] = useState([]);
   const [editingRoutine, setEditingRoutine] = useState(null);
   const [expandedBatchSections, setExpandedBatchSections] = useState({});
+  const [showTimeSlotConfig, setShowTimeSlotConfig] = useState(false);
+  const [timeSlots, setTimeSlots] = useState(DEFAULT_TIME_SLOTS);
+  const [timeConfig, setTimeConfig] = useState({
+    startTime: '07:01',
+    endTime: '14:00',
+    interval: 30,
+  });
+  const [applyGlobal, setApplyGlobal] = useState(false);
   const [form, setForm] = useState({
     facultyId: '',
     batchId: batchId || '',
@@ -421,45 +683,32 @@ export default function RoutineManager3D({
     day: 'numeric',
   });
 
-  const routinesByBatch = useMemo(() => {
-    const g = {};
-    allActiveRoutines.forEach((r) => {
-      const k = r.batchId || 'unassigned';
-      if (!g[k])
-        g[k] = {
-          batch: r.batch || { id: 'unassigned', name: 'Unassigned' },
-          routines: [],
-        };
-      g[k].routines.push(r);
-    });
-    return Object.values(g).sort((a, b) =>
-      (a.batch?.name || '').localeCompare(b.batch?.name || '')
-    );
-  }, [allActiveRoutines]);
-  const facultyRoutines = useMemo(
-    () =>
-      selectedFaculty
-        ? allActiveRoutines.filter(
-            (r) => r.facultyId === parseInt(selectedFaculty)
-          )
-        : [],
-    [allActiveRoutines, selectedFaculty]
-  );
-  const facultyInfo = useMemo(
-    () => faculties.find((f) => f.id === parseInt(selectedFaculty)),
-    [faculties, selectedFaculty]
-  );
-  const filteredFacultyList = useMemo(() => {
-    const t = facultySearch.toLowerCase();
-    return t
-      ? faculties.filter(
-          (f) =>
-            f.name?.toLowerCase().includes(t) ||
-            f.email?.toLowerCase().includes(t) ||
-            f.designation?.toLowerCase().includes(t)
-        )
-      : faculties;
-  }, [faculties, facultySearch]);
+  // ==================== FETCH CONFIG FROM DATABASE ====================
+  const fetchRoutineConfig = useCallback(async () => {
+    if (!batchId && !classroomId) return;
+    const id = batchId || classroomId;
+    try {
+      const res = await fetch(`/api/routine-config?batchId=${id}`);
+      if (res.ok) {
+        const data = await res.json();
+        const c = data.config;
+        if (c?.timeSlots?.length > 0) {
+          setTimeSlots(
+            typeof c.timeSlots === 'string'
+              ? JSON.parse(c.timeSlots)
+              : c.timeSlots
+          );
+          setTimeConfig({
+            startTime: c.startTime || '07:01',
+            endTime: c.endTime || '14:00',
+            interval: c.interval || 30,
+          });
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching routine config:', e);
+    }
+  }, [batchId, classroomId]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -521,8 +770,49 @@ export default function RoutineManager3D({
     if (isOpen) {
       setViewMode(isBatchView ? 'classroom' : 'multipleBatches');
       fetchData();
+      fetchRoutineConfig();
     }
-  }, [isOpen, fetchData, isBatchView]);
+  }, [isOpen, fetchData, fetchRoutineConfig, isBatchView]);
+
+  const routinesByBatch = useMemo(() => {
+    const g = {};
+    allActiveRoutines.forEach((r) => {
+      const k = r.batchId || 'unassigned';
+      if (!g[k])
+        g[k] = {
+          batch: r.batch || { id: 'unassigned', name: 'Unassigned' },
+          routines: [],
+        };
+      g[k].routines.push(r);
+    });
+    return Object.values(g).sort((a, b) =>
+      (a.batch?.name || '').localeCompare(b.batch?.name || '')
+    );
+  }, [allActiveRoutines]);
+  const facultyRoutines = useMemo(
+    () =>
+      selectedFaculty
+        ? allActiveRoutines.filter(
+            (r) => r.facultyId === parseInt(selectedFaculty)
+          )
+        : [],
+    [allActiveRoutines, selectedFaculty]
+  );
+  const facultyInfo = useMemo(
+    () => faculties.find((f) => f.id === parseInt(selectedFaculty)),
+    [faculties, selectedFaculty]
+  );
+  const filteredFacultyList = useMemo(() => {
+    const t = facultySearch.toLowerCase();
+    return t
+      ? faculties.filter(
+          (f) =>
+            f.name?.toLowerCase().includes(t) ||
+            f.email?.toLowerCase().includes(t) ||
+            f.designation?.toLowerCase().includes(t)
+        )
+      : faculties;
+  }, [faculties, facultySearch]);
 
   const displayRoutines = isBatchView ? routines : allActiveRoutines;
   const getRoutinesAt = (d, s, arr = displayRoutines) =>
@@ -552,7 +842,7 @@ export default function RoutineManager3D({
             type: 'faculty',
             routine: r,
             message: `${r.faculty?.name || 'Faculty'} busy`,
-            detail: `${DAYS[d]} • ${TIME_SLOTS[s]?.display}`,
+            detail: `${DAYS[d]} • ${timeSlots[s]?.display}`,
             subject: r.subject || 'N/A',
             room: roomDisplay(r),
             batch: r.batch?.name || 'N/A',
@@ -566,7 +856,7 @@ export default function RoutineManager3D({
             type: 'room',
             routine: r,
             message: `${r.classroom?.name || 'Room'} occupied`,
-            detail: `${DAYS[d]} • ${TIME_SLOTS[s]?.display}`,
+            detail: `${DAYS[d]} • ${timeSlots[s]?.display}`,
             subject: r.subject || 'N/A',
             faculty: r.faculty?.name || 'N/A',
             batch: r.batch?.name || 'N/A',
@@ -583,7 +873,7 @@ export default function RoutineManager3D({
             type: 'roomNumber',
             routine: r,
             message: `Room "${rn}" in use`,
-            detail: `${DAYS[d]} • ${TIME_SLOTS[s]?.display}`,
+            detail: `${DAYS[d]} • ${timeSlots[s]?.display}`,
             subject: r.subject || 'N/A',
             faculty: r.faculty?.name || 'N/A',
             room: roomDisplay(r),
@@ -776,10 +1066,57 @@ export default function RoutineManager3D({
     }
   };
 
+  // ==================== SAVE CONFIG TO DATABASE ====================
+  const saveConfigToDB = async (data, isGlobal = false) => {
+    const id = batchId || classroomId;
+    if (!id) return;
+    try {
+      const body = { batchId: parseInt(id), ...data, isGlobal };
+      const res = await fetch('/api/routine-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        setSuccessMsg('Configuration saved!');
+        setTimeout(() => setSuccessMsg(null), 3000);
+        return true;
+      }
+      return false;
+    } catch {
+      setErrorMsg('Failed to save');
+      setTimeout(() => setErrorMsg(null), 3000);
+      return false;
+    }
+  };
+
+  const handleTimeSlotSave = async (slots, config, isGlobal) => {
+    setTimeSlots(slots);
+    setTimeConfig(config);
+    if (isGlobal) {
+      // Save with global flag - API should handle applying to all batches
+      await saveConfigToDB(
+        {
+          timeSlots: slots,
+          startTime: config.startTime,
+          endTime: config.endTime,
+          interval: config.interval,
+        },
+        true
+      );
+    } else {
+      await saveConfigToDB({
+        timeSlots: slots,
+        startTime: config.startTime,
+        endTime: config.endTime,
+        interval: config.interval,
+      });
+    }
+  };
+
   const toggleBatch = (bid) =>
     setExpandedBatchSections((p) => ({ ...p, [bid]: !p[bid] }));
 
-  // ==================== RENDER CELL WITH COURSE COLORS ====================
   const getCellStyle = (dr) => {
     if (!dr)
       return { bg: 'bg-white', border: 'border-gray-100', printBg: '#ffffff' };
@@ -864,7 +1201,7 @@ export default function RoutineManager3D({
                 <div className="hidden group-hover:flex print:hidden absolute top-0 right-0 gap-0.5">
                   <button
                     onClick={(e) => handleEdit(dr, e)}
-                    className="p-0.5 bg-blue-500 text-white rounded"
+                    className="p-0.5 bg-blue-500 text-white rounded cursor-pointer"
                   >
                     <Edit2 size={8} />
                   </button>
@@ -873,7 +1210,7 @@ export default function RoutineManager3D({
                       e.stopPropagation();
                       deleteSingle(dr.id);
                     }}
-                    className="p-0.5 bg-red-500 text-white rounded"
+                    className="p-0.5 bg-red-500 text-white rounded cursor-pointer"
                   >
                     <Trash2 size={8} />
                   </button>
@@ -881,7 +1218,7 @@ export default function RoutineManager3D({
               )}
             </div>
           ) : showAdd ? (
-            <button className="w-full h-full min-h-[40px] print:min-h-[28px] text-[9px] text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded flex items-center justify-center print:hidden">
+            <button className="w-full h-full min-h-[40px] print:min-h-[28px] text-[9px] text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded flex items-center justify-center print:hidden cursor-pointer">
               <Plus size={10} className="mr-0.5" />
               {mergeMode ? 'Select' : 'Add Routine'}
             </button>
@@ -895,13 +1232,16 @@ export default function RoutineManager3D({
 
   const renderTable = (arr, prefix = '', showAdd = false) => (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse" style={{ minWidth: '1200px' }}>
+      <table
+        className="w-full border-collapse"
+        style={{ minWidth: `${timeSlots.length * 80 + 80}px` }}
+      >
         <thead>
           <tr>
             <th className="border p-1 bg-gray-100 text-xs font-semibold w-16 sticky left-0 bg-gray-100 z-10">
               Day
             </th>
-            {TIME_SLOTS.map((s) => (
+            {timeSlots.map((s) => (
               <th
                 key={prefix + s.id}
                 className="border p-1 bg-gray-100 text-[8px] font-medium text-gray-600"
@@ -915,7 +1255,7 @@ export default function RoutineManager3D({
           {DAYS.map((day, di) => (
             <tr key={prefix + di}>
               <td
-                className={`border p-1 text-xs font-semibold sticky left-0 z-10 ${
+                className={`border p-1 text-xs font-semibold sticky left-0 z-10 cursor-pointer ${
                   mergeMode && mergeSelections.some((x) => x.day === di)
                     ? 'bg-yellow-100'
                     : 'bg-gray-50'
@@ -923,13 +1263,13 @@ export default function RoutineManager3D({
                 onClick={() =>
                   mergeMode &&
                   setMergeSelections(
-                    TIME_SLOTS.map((s) => ({ day: di, slotId: s.id }))
+                    timeSlots.map((s) => ({ day: di, slotId: s.id }))
                   )
                 }
               >
                 {day.substring(0, 3)}
               </td>
-              {TIME_SLOTS.map((slot) => {
+              {timeSlots.map((slot) => {
                 const here = getRoutinesAt(di, slot.id, arr);
                 const merged = findMergedRoutine(di, slot.id, arr);
                 return renderCell(di, slot.id, here, merged, prefix, showAdd);
@@ -941,7 +1281,6 @@ export default function RoutineManager3D({
     </div>
   );
 
-  // ==================== PRINT CELL WITH COURSE COLORS ====================
   const renderPrintCell = (dr, cs) => {
     const style = getCellStyle(dr);
     return (
@@ -978,7 +1317,6 @@ export default function RoutineManager3D({
     );
   };
 
-  // ==================== MULTI BATCH VIEW ====================
   const renderMultiBatchView = () => {
     const withContent = routinesByBatch.filter(
       (b) =>
@@ -996,7 +1334,7 @@ export default function RoutineManager3D({
           </span>
           <button
             onClick={() => window.print()}
-            className="px-3 py-1 bg-white border rounded-lg text-xs flex items-center gap-1 hover:bg-gray-50"
+            className="px-3 py-1 bg-white border rounded-lg text-xs flex items-center gap-1 hover:bg-gray-50 cursor-pointer"
           >
             <Printer size={12} />
             Print All
@@ -1015,7 +1353,7 @@ export default function RoutineManager3D({
               >
                 <button
                   onClick={() => toggleBatch(batch.id)}
-                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50"
+                  className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
                     <motion.div animate={{ rotate: exp ? 90 : 0 }}>
@@ -1076,14 +1414,14 @@ export default function RoutineManager3D({
                 <div>
                   <b>Batch: </b>
                   {batch.name || 'Unassigned'}
-                  {batch.department?.name ? ` (${batch.department.name})` : ''}
                 </div>
                 <div>
                   <b>Date: </b>
                   {printDate}
                 </div>
                 <div>
-                  <b>Time: </b>7:01 AM – 2:00 PM
+                  <b>Time: </b>
+                  {timeConfig.startTime} – {timeConfig.endTime}
                 </div>
               </div>
               <table
@@ -1098,11 +1436,11 @@ export default function RoutineManager3D({
                     >
                       Day
                     </th>
-                    {TIME_SLOTS.map((s) => (
+                    {timeSlots.map((s) => (
                       <th
                         key={s.id}
                         className="border border-black bg-gray-300 text-[6px] font-bold p-0.5 text-center leading-tight"
-                        style={{ width: `${96 / 14}%` }}
+                        style={{ width: `${96 / timeSlots.length}%` }}
                       >
                         {s.display}
                       </th>
@@ -1115,7 +1453,7 @@ export default function RoutineManager3D({
                       <td className="border border-black bg-gray-200 text-[7px] font-bold text-center p-0.5">
                         {day.substring(0, 3)}
                       </td>
-                      {TIME_SLOTS.map((slot) => {
+                      {timeSlots.map((slot) => {
                         const here = br.filter(
                           (r) => r.day === di && r.timeSlot === slot.id
                         );
@@ -1141,7 +1479,6 @@ export default function RoutineManager3D({
     );
   };
 
-  // ==================== FACULTY VIEW ====================
   const renderFacultyView = () => (
     <div className="flex-1 flex overflow-hidden">
       <div className="w-80 border-r border-gray-200 bg-gray-50 overflow-y-auto flex-shrink-0 print:hidden">
@@ -1171,7 +1508,7 @@ export default function RoutineManager3D({
                 <button
                   key={f.id}
                   onClick={() => setSelectedFaculty(f.id.toString())}
-                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm ${
+                  className={`w-full text-left px-3 py-2.5 rounded-lg text-sm cursor-pointer ${
                     selectedFaculty === f.id.toString()
                       ? 'bg-indigo-100 font-medium'
                       : 'hover:bg-gray-100'
@@ -1213,55 +1550,6 @@ export default function RoutineManager3D({
                 batches
               </p>
               {renderTable(facultyRoutines, 'fac', false)}
-              <div className="mt-6">
-                <h4 className="text-sm font-semibold mb-2">Summary</h4>
-                <table className="w-full text-sm border">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="border p-2 text-left text-xs">Day</th>
-                      <th className="border p-2 text-left text-xs">Time</th>
-                      <th className="border p-2 text-left text-xs">Subject</th>
-                      <th className="border p-2 text-left text-xs">Batch</th>
-                      <th className="border p-2 text-left text-xs">Room</th>
-                      <th className="border p-2 text-left text-xs">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {facultyRoutines
-                      .sort((a, b) => a.day - b.day || a.timeSlot - b.timeSlot)
-                      .map((r, i) => (
-                        <tr key={i}>
-                          <td className="border p-2 text-xs">{DAYS[r.day]}</td>
-                          <td className="border p-2 text-xs">
-                            {TIME_SLOTS[r.timeSlot]?.display}
-                            {r.timeSlotEnd
-                              ? `-${TIME_SLOTS[r.timeSlotEnd]?.display}`
-                              : ''}
-                          </td>
-                          <td className="border p-2 text-xs font-medium">
-                            {r.subject ||
-                              (r.status === 'break' ? 'BREAK' : 'N/A')}
-                          </td>
-                          <td className="border p-2 text-xs font-medium text-indigo-600">
-                            {r.batch?.name || 'N/A'}
-                          </td>
-                          <td className="border p-2 text-xs">
-                            {roomDisplay(r)}
-                          </td>
-                          <td className="border p-2 text-xs">
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] ${
-                                STATUS_STYLES[r.status]?.bg
-                              } ${STATUS_STYLES[r.status]?.text}`}
-                            >
-                              {STATUS_LABELS[r.status] || r.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
             </div>
             <div className="hidden print:block p-1">
               <div className="text-center py-0.5 border-b border-black">
@@ -1271,11 +1559,6 @@ export default function RoutineManager3D({
                 <h2 className="text-[9px]">
                   Faculty Routine - {facultyInfo.name}
                 </h2>
-                <p className="text-[7px]">
-                  {facultyInfo.designation || 'Faculty'} |{' '}
-                  {facultyRoutines.filter((r) => r.status === 'active').length}{' '}
-                  Classes
-                </p>
               </div>
               <div className="flex justify-between px-2 py-0.5 text-[7px] border-b border-gray-400">
                 <div>
@@ -1283,7 +1566,8 @@ export default function RoutineManager3D({
                   {printDate}
                 </div>
                 <div>
-                  <b>Time: </b>7:01 AM – 2:00 PM
+                  <b>Time: </b>
+                  {timeConfig.startTime} – {timeConfig.endTime}
                 </div>
               </div>
               <table
@@ -1298,11 +1582,11 @@ export default function RoutineManager3D({
                     >
                       Day
                     </th>
-                    {TIME_SLOTS.map((s) => (
+                    {timeSlots.map((s) => (
                       <th
                         key={s.id}
                         className="border border-black bg-gray-300 text-[6px] font-bold p-0.5 text-center leading-tight"
-                        style={{ width: `${96 / 14}%` }}
+                        style={{ width: `${96 / timeSlots.length}%` }}
                       >
                         {s.display}
                       </th>
@@ -1315,7 +1599,7 @@ export default function RoutineManager3D({
                       <td className="border border-black bg-gray-200 text-[7px] font-bold text-center p-0.5">
                         {day.substring(0, 3)}
                       </td>
-                      {TIME_SLOTS.map((slot) => {
+                      {timeSlots.map((slot) => {
                         const here = facultyRoutines.filter(
                           (r) => r.day === di && r.timeSlot === slot.id
                         );
@@ -1337,52 +1621,6 @@ export default function RoutineManager3D({
                   ))}
                 </tbody>
               </table>
-              <div className="mt-2">
-                <h4 className="text-[8px] font-bold border-b border-black pb-0.5">
-                  Summary
-                </h4>
-                <table className="w-full text-[7px] border-collapse">
-                  <thead>
-                    <tr className="bg-gray-200">
-                      <th className="border border-black p-0.5">Day</th>
-                      <th className="border border-black p-0.5">Time</th>
-                      <th className="border border-black p-0.5">Subject</th>
-                      <th className="border border-black p-0.5">Batch</th>
-                      <th className="border border-black p-0.5">Room</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {facultyRoutines
-                      .filter((r) => r.status === 'active')
-                      .sort((a, b) => a.day - b.day || a.timeSlot - b.timeSlot)
-                      .map((r, i) => (
-                        <tr key={i}>
-                          <td className="border border-black p-0.5">
-                            {DAYS[r.day]}
-                          </td>
-                          <td className="border border-black p-0.5">
-                            {TIME_SLOTS[r.timeSlot]?.display}
-                            {r.timeSlotEnd
-                              ? `-${TIME_SLOTS[r.timeSlotEnd]?.display}`
-                              : ''}
-                          </td>
-                          <td className="border border-black p-0.5">
-                            {r.subject || 'N/A'}
-                          </td>
-                          <td className="border border-black p-0.5 font-medium text-indigo-700">
-                            {r.batch?.name || 'N/A'}
-                          </td>
-                          <td className="border border-black p-0.5">
-                            {roomDisplay(r)}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="text-[6px] text-gray-500 text-center mt-0.5">
-                {printDate}
-              </div>
             </div>
           </>
         ) : (
@@ -1418,7 +1656,7 @@ export default function RoutineManager3D({
             <div className="flex items-center gap-3">
               <button
                 onClick={onClose}
-                className="text-white/80 hover:text-white p-1.5 rounded-lg"
+                className="text-white/80 hover:text-white p-1.5 rounded-lg cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -1443,27 +1681,39 @@ export default function RoutineManager3D({
                     }{' '}
                     routines
                   </span>
-                  <span> • 7:01 AM – 2:00 PM</span>
+                  <span>
+                    {' '}
+                    • {timeConfig.startTime} – {timeConfig.endTime}
+                  </span>
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {isBatchView && (
-                <button
-                  onClick={() => {
-                    setViewMode('classroom');
-                    setMergeMode(false);
-                    setSelectedFaculty(null);
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
-                    viewMode === 'classroom'
-                      ? 'bg-white text-indigo-600'
-                      : 'bg-white/20 text-white'
-                  }`}
-                >
-                  <BookOpen size={12} className="inline mr-1" />
-                  Grid
-                </button>
+                <>
+                  <button
+                    onClick={() => {
+                      setViewMode('classroom');
+                      setMergeMode(false);
+                      setSelectedFaculty(null);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer ${
+                      viewMode === 'classroom'
+                        ? 'bg-white text-indigo-600'
+                        : 'bg-white/20 text-white'
+                    }`}
+                  >
+                    <BookOpen size={12} className="inline mr-1" />
+                    Grid
+                  </button>
+                  <button
+                    onClick={() => setShowTimeSlotConfig(true)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-white/20 text-white cursor-pointer flex items-center gap-1"
+                  >
+                    <Settings size={12} />
+                    Time
+                  </button>
+                </>
               )}
               <button
                 onClick={() => {
@@ -1471,7 +1721,7 @@ export default function RoutineManager3D({
                   setMergeMode(false);
                   setSelectedFaculty(null);
                 }}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer ${
                   viewMode === 'faculty'
                     ? 'bg-white text-indigo-600'
                     : 'bg-white/20 text-white'
@@ -1483,20 +1733,20 @@ export default function RoutineManager3D({
               {!isBatchView && (
                 <button
                   onClick={() => setViewMode('multipleBatches')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium cursor-pointer ${
                     viewMode === 'multipleBatches'
                       ? 'bg-white text-indigo-600'
                       : 'bg-white/20 text-white'
                   }`}
                 >
                   <BookOpen size={12} className="inline mr-1" />
-                  All Batches
+                  All
                 </button>
               )}
               {isBatchView && viewMode === 'classroom' && (
                 <button
                   onClick={() => setMergeMode(!mergeMode)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium flex items-center gap-1 cursor-pointer ${
                     mergeMode
                       ? 'bg-yellow-500 text-white'
                       : 'bg-white/20 text-white'
@@ -1508,7 +1758,7 @@ export default function RoutineManager3D({
               )}
               <button
                 onClick={() => window.print()}
-                className="px-2.5 py-1 bg-white/20 text-white rounded-lg text-xs flex items-center gap-1"
+                className="px-2.5 py-1 bg-white/20 text-white rounded-lg text-xs flex items-center gap-1 cursor-pointer"
               >
                 <Printer size={12} />
                 Print
@@ -1516,6 +1766,7 @@ export default function RoutineManager3D({
             </div>
           </div>
         </div>
+
         <div className="hidden print:block w-full flex-shrink-0">
           <div className="text-center py-1 border-b border-black">
             <h1 className="text-[12px] font-bold uppercase">
@@ -1527,19 +1778,18 @@ export default function RoutineManager3D({
             <div>
               <b>Batch: </b>
               {selectedBatch?.name || batchId || 'All'}
-              {selectedBatch?.department?.name
-                ? ` (${selectedBatch.department.name})`
-                : ''}
             </div>
             <div>
               <b>Date: </b>
               {printDate}
             </div>
             <div>
-              <b>Time: </b>7:01 AM – 2:00 PM
+              <b>Time: </b>
+              {timeConfig.startTime} – {timeConfig.endTime}
             </div>
           </div>
         </div>
+
         {mergeMode && (
           <div className="bg-yellow-50 border-b px-4 py-1.5 flex items-center justify-between flex-shrink-0 print:hidden">
             <span className="text-xs">
@@ -1554,7 +1804,7 @@ export default function RoutineManager3D({
               {mergeSelections.length >= 2 && (
                 <button
                   onClick={confirmMerge}
-                  className="px-3 py-1 bg-yellow-600 text-white rounded text-xs"
+                  className="px-3 py-1 bg-yellow-600 text-white rounded text-xs cursor-pointer"
                 >
                   Merge
                 </button>
@@ -1562,6 +1812,7 @@ export default function RoutineManager3D({
             </div>
           </div>
         )}
+
         <AnimatePresence>
           {successMsg && (
             <motion.div
@@ -1586,6 +1837,7 @@ export default function RoutineManager3D({
             </motion.div>
           )}
         </AnimatePresence>
+
         {loading ? (
           <div className="flex-1 flex items-center justify-center">
             <Loader2 size={40} className="animate-spin text-indigo-600" />
@@ -1609,11 +1861,11 @@ export default function RoutineManager3D({
                     >
                       Day
                     </th>
-                    {TIME_SLOTS.map((s) => (
+                    {timeSlots.map((s) => (
                       <th
                         key={s.id}
                         className="border border-black bg-gray-300 text-[6px] font-bold p-0.5 text-center leading-tight"
-                        style={{ width: `${96 / 14}%` }}
+                        style={{ width: `${96 / timeSlots.length}%` }}
                       >
                         {s.display}
                       </th>
@@ -1626,7 +1878,7 @@ export default function RoutineManager3D({
                       <td className="border border-black bg-gray-200 text-[7px] font-bold text-center p-0.5">
                         {day}
                       </td>
-                      {TIME_SLOTS.map((slot) => {
+                      {timeSlots.map((slot) => {
                         const here = displayRoutines.filter(
                           (r) => r.day === di && r.timeSlot === slot.id
                         );
@@ -1642,9 +1894,6 @@ export default function RoutineManager3D({
                   ))}
                 </tbody>
               </table>
-              <div className="text-[6px] text-gray-500 text-center mt-0.5">
-                Generated: {printDate}
-              </div>
             </div>
             {renderTable(displayRoutines, '', isBatchView)}
           </div>
@@ -1671,15 +1920,15 @@ export default function RoutineManager3D({
                     {editingRoutine ? 'Edit' : 'Add'} Routine
                   </h3>
                   <p className="text-sm text-gray-500">
-                    {DAYS[form.day]} • {TIME_SLOTS[form.startSlot]?.display}
+                    {DAYS[form.day]} • {timeSlots[form.startSlot]?.display}
                     {form.endSlot > form.startSlot
-                      ? ` – ${TIME_SLOTS[form.endSlot]?.display}`
+                      ? ` – ${timeSlots[form.endSlot]?.display}`
                       : ''}
                   </p>
                 </div>
                 <button
                   onClick={() => setShowRoutineModal(false)}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
+                  className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer"
                 >
                   <X size={18} />
                 </button>
@@ -1810,9 +2059,6 @@ export default function RoutineManager3D({
                       <p className="text-sm font-medium text-blue-800">
                         Break Time
                       </p>
-                      <p className="text-xs text-blue-600">
-                        No faculty or classroom needed
-                      </p>
                     </div>
                   </>
                 )}
@@ -1833,7 +2079,7 @@ export default function RoutineManager3D({
                       }}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                     >
-                      {TIME_SLOTS.map((s) => (
+                      {timeSlots.map((s) => (
                         <option key={s.id} value={s.id}>
                           {s.display}
                         </option>
@@ -1851,13 +2097,13 @@ export default function RoutineManager3D({
                       }
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                     >
-                      {TIME_SLOTS.filter((s) => s.id >= form.startSlot).map(
-                        (s) => (
+                      {timeSlots
+                        .filter((s) => s.id >= form.startSlot)
+                        .map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.display}
                           </option>
-                        )
-                      )}
+                        ))}
                     </select>
                   </div>
                 </div>
@@ -1879,7 +2125,7 @@ export default function RoutineManager3D({
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   onClick={() => setShowRoutineModal(false)}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1890,7 +2136,7 @@ export default function RoutineManager3D({
                     (!form.facultyId && form.status !== 'break') ||
                     !form.batchId
                   }
-                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2 cursor-pointer"
                 >
                   {saving ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -1904,6 +2150,7 @@ export default function RoutineManager3D({
           </div>
         )}
       </AnimatePresence>
+
       {/* Delete Modal */}
       <AnimatePresence>
         {showDeleteConfirm && deleteTarget && (
@@ -1931,7 +2178,7 @@ export default function RoutineManager3D({
                   </h3>
                   <p className="text-sm text-gray-500">
                     {DAYS[deleteTarget.day]} •{' '}
-                    {TIME_SLOTS[deleteTarget.slotId]?.display}
+                    {timeSlots[deleteTarget.slotId]?.display}
                   </p>
                 </div>
               </div>
@@ -1955,13 +2202,13 @@ export default function RoutineManager3D({
                     setShowDeleteConfirm(false);
                     setDeleteTarget(null);
                   }}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={deleteSlot}
-                  className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+                  className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 cursor-pointer"
                 >
                   Delete All
                 </button>
@@ -1970,6 +2217,7 @@ export default function RoutineManager3D({
           </div>
         )}
       </AnimatePresence>
+
       {/* Conflict Modal */}
       <AnimatePresence>
         {showConflictModal && (
@@ -2033,9 +2281,6 @@ export default function RoutineManager3D({
                             {c.type === 'faculty' ? (
                               <p className="text-xs">
                                 <b>Room:</b> {c.room}
-                                {c.routine?.roomNumber
-                                  ? ` (Rm ${c.routine.roomNumber})`
-                                  : ''}
                               </p>
                             ) : c.type === 'room' ? (
                               <p className="text-xs">
@@ -2064,7 +2309,7 @@ export default function RoutineManager3D({
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowConflictModal(false)}
-                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg font-medium"
+                  className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg font-medium cursor-pointer"
                 >
                   Go Back
                 </button>
@@ -2073,6 +2318,16 @@ export default function RoutineManager3D({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Time Slot Config Modal */}
+      <TimeSlotConfigModal
+        isOpen={showTimeSlotConfig}
+        onClose={() => setShowTimeSlotConfig(false)}
+        timeSlots={timeSlots}
+        onSave={handleTimeSlotSave}
+        batchId={batchId || classroomId}
+        applyGlobal={applyGlobal}
+      />
 
       <style jsx global>{`
         @media print {
@@ -2154,12 +2409,6 @@ export default function RoutineManager3D({
           p,
           div {
             font-size: 7px !important;
-          }
-          .border-b-2 {
-            border-bottom-width: 1px !important;
-          }
-          .border-2 {
-            border-width: 1px !important;
           }
         }
       `}</style>
