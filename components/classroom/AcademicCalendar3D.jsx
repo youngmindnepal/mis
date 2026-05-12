@@ -460,7 +460,7 @@ export default function AcademicCalendar3D({
             ];
 
             // Check if it's a working day (Sunday-Thursday) AND not a holiday
-            const isWorkingDay = dayOfWeek >= 0 && dayOfWeek <= 4;
+            const isWorkingDay = dayOfWeek >= 0 && dayOfWeek <= 5;
             const isHoliday = isHolidayDate(examDate);
 
             if (isWorkingDay && !isHoliday) {
@@ -965,8 +965,8 @@ export default function AcademicCalendar3D({
                   <div
                     key={d}
                     className={`px-1 py-2 text-center text-xs font-semibold uppercase border-y ${
-                      i === 5 || i === 6
-                        ? 'bg-gray-100 text-red-500'
+                      i === 6
+                        ? 'bg-red-100 text-red-500'
                         : 'bg-gray-50 text-gray-500'
                     }`}
                   >

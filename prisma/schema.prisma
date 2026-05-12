@@ -29,7 +29,11 @@ model User {
 
   enteredResults     Result[]        @relation("EnteredResults")  // Changed from "EnteredByUser"
   verifiedResults    Result[]        @relation("VerifiedResults")  // Changed from "VerifiedByUser"
-    
+  
+  preadmissions   Preadmission[]   
+  followUps       FollowUp[]   
+
+  employees       Employee[]   
   
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
@@ -97,6 +101,7 @@ model Department {
   classrooms      Classroom[]
   exams           Exam[]
   courseLists      CourseList[]
+  preadmissions   PreadmissionDepartment[]
 
 }
 
@@ -712,4 +717,140 @@ model TerminalConfig {
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// prisma/schema.prisma
+
+model Preadmission {
+  id              Int       @id @default(autoincrement())
+  studentName     String
+  phone           String
+  address         String?
+  email           String?
+  date            DateTime  @default(now())
+  referralSource  String?   // facebook, instagram, youtube, students, website, newspaper, referred_by, agent, other
+  referralName    String?   // Name of person who referred (if referred_by)
+  previousCollege String?   // Previous college/school name
+  gpa             Float?    // GPA/Percentage
+  notes           String?
+  status          String    @default("pending") // pending, contacted, follow_up, enrolled, rejected
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  // Relations
+  departments     PreadmissionDepartment[]
+  counselorId     Int?
+  counselor       User?     @relation(fields: [counselorId], references: [id])
+  agentId         Int?
+  agent           Agent?    @relation(fields: [agentId], references: [id])
+  
+  followUps       FollowUp[]
+
+  @@index([referralSource])
+  @@index([agentId])
+}
+
+model PreadmissionDepartment {
+  id               Int       @id @default(autoincrement())
+  preadmissionId   Int
+  departmentId     Int
+  
+  preadmission     Preadmission @relation(fields: [preadmissionId], references: [id], onDelete: Cascade)
+  department       Department   @relation(fields: [departmentId], references: [id])
+  
+  @@unique([preadmissionId, departmentId])
+}
+
+model Agent {
+  id              Int       @id @default(autoincrement())
+  name            String
+  phone           String?   @unique
+  email           String?   @unique
+  address         String?
+  company         String?   // Agency/company name
+  commission      Float?    // Commission percentage
+  status          AgentStatus @default(active)
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  preadmissions   Preadmission[]
+  
+  @@index([name])
+  @@index([phone])
+}
+
+enum AgentStatus {
+  active
+  inactive
+}
+
+// Add this model to your schema.prisma
+
+model FollowUp {
+  id              Int       @id @default(autoincrement())
+  preadmissionId  Int
+  preadmission    Preadmission @relation(fields: [preadmissionId], references: [id], onDelete: Cascade)
+  
+  followUpDate    DateTime
+  notes           String?
+  status          String    @default("pending")
+  outcome         String?
+  
+  counselorId     Int?
+  counselor       User?     @relation(fields: [counselorId], references: [id])
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([preadmissionId])
+  @@index([followUpDate])
+  @@index([counselorId])
+  @@index([status])
+}
+
+// Add these models to your schema.prisma
+
+model Employee {
+  id              Int       @id @default(autoincrement())
+  name            String
+  email           String?   @unique
+  phone           String?
+  department      String?
+  designation     String?
+  employeeId      String    @unique
+  faceDescriptor  Json?     // Store face descriptor as JSON array
+  faceImage       String?   // Base64 face image for reference
+  status          String    @default("active")
+  joinedDate      DateTime  @default(now())
+  
+  userId          Int?      @unique
+  user            User?     @relation(fields: [userId], references: [id])
+  attendances     EmployeeAttendance[]
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@index([employeeId])
+  @@index([email])
+}
+
+model EmployeeAttendance {
+  id              Int       @id @default(autoincrement())
+  employeeId      Int
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  
+  date            DateTime  @default(now())
+  checkIn         DateTime?
+  checkOut        DateTime?
+  status          String    @default("present") // present, absent, late, half_day
+  method          String    @default("face")    // face, manual, rfid
+  confidence      Float?    // Face recognition confidence score
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  
+  @@unique([employeeId, date])
+  @@index([date])
+  @@index([employeeId, date])
 }
