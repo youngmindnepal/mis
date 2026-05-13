@@ -7,27 +7,60 @@ import { prisma } from '@/lib/prisma';
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session)
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const { searchParams } = new URL(request.url);
     const preadmissionId = searchParams.get('preadmissionId');
+    const followUpDate = searchParams.get('followUpDate');
+    const status = searchParams.get('status');
 
     const where = {};
-    if (preadmissionId) where.preadmissionId = parseInt(preadmissionId);
 
-    console.log('Fetching follow-ups with where:', where);
+    if (preadmissionId) {
+      where.preadmissionId = parseInt(preadmissionId);
+    }
+
+    if (followUpDate) {
+      // Filter by exact date (start of day to end of day)
+      const dateStart = new Date(followUpDate);
+      dateStart.setHours(0, 0, 0, 0);
+
+      const dateEnd = new Date(followUpDate);
+      dateEnd.setHours(23, 59, 59, 999);
+
+      where.followUpDate = {
+        gte: dateStart,
+        lte: dateEnd,
+      };
+    }
+
+    if (status) {
+      where.status = status;
+    }
 
     const followUps = await prisma.followUp.findMany({
       where,
+      orderBy: { followUpDate: 'desc' },
       include: {
-        preadmission: { select: { id: true, studentName: true, phone: true } },
-        counselor: { select: { id: true, name: true } },
+        preadmission: {
+          select: {
+            id: true,
+            studentName: true,
+            phone: true,
+          },
+        },
+        counselor: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
-      orderBy: { followUpDate: 'asc' },
     });
 
-    return NextResponse.json({ success: true, followUps });
+    return NextResponse.json({ followUps });
   } catch (error) {
     console.error('Error fetching follow-ups:', error);
     return NextResponse.json(
@@ -40,20 +73,21 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session)
+    if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const body = await request.json();
-    console.log('POST body:', body);
-
     const { preadmissionId, followUpDate, notes, outcome } = body;
 
+    // Validate required fields
     if (!preadmissionId) {
       return NextResponse.json(
         { error: 'preadmissionId is required' },
         { status: 400 }
       );
     }
+
     if (!followUpDate) {
       return NextResponse.json(
         { error: 'followUpDate is required' },
@@ -61,62 +95,52 @@ export async function POST(request) {
       );
     }
 
-    // Verify preadmission exists
+    // Parse and validate date
+    const parsedDate = new Date(followUpDate);
+    if (isNaN(parsedDate.getTime())) {
+      return NextResponse.json(
+        { error: 'Invalid followUpDate' },
+        { status: 400 }
+      );
+    }
+
+    // Check if preadmission exists
     const preadmission = await prisma.preadmission.findUnique({
       where: { id: parseInt(preadmissionId) },
     });
 
     if (!preadmission) {
       return NextResponse.json(
-        { error: 'Student record not found' },
+        { error: 'Preadmission not found' },
         { status: 404 }
       );
     }
 
-    // Create follow-up using raw query if model method fails
-    let followUp;
-    try {
-      followUp = await prisma.followUp.create({
-        data: {
-          preadmissionId: parseInt(preadmissionId),
-          followUpDate: new Date(followUpDate),
-          notes: notes?.trim() || null,
-          status: 'pending',
-          outcome: outcome || null,
-          counselorId: session.user?.id ? parseInt(session.user.id) : null,
+    const followUp = await prisma.followUp.create({
+      data: {
+        preadmissionId: parseInt(preadmissionId),
+        followUpDate: parsedDate,
+        notes: notes?.trim() || null,
+        outcome: outcome || null,
+        counselorId: parseInt(session.user.id),
+        status: 'pending',
+      },
+      include: {
+        preadmission: {
+          select: {
+            id: true,
+            studentName: true,
+            phone: true,
+          },
         },
-      });
-    } catch (createError) {
-      console.error('Prisma create error:', createError);
-
-      // Fallback: Try using raw SQL
-      try {
-        const result = await prisma.$executeRawUnsafe(
-          `INSERT INTO "FollowUp" ("preadmissionId", "followUpDate", "notes", "status", "outcome", "counselorId", "createdAt", "updatedAt") 
-           VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW()) RETURNING *`,
-          parseInt(preadmissionId),
-          new Date(followUpDate),
-          notes?.trim() || null,
-          'pending',
-          outcome || null,
-          session.user?.id ? parseInt(session.user.id) : null
-        );
-        followUp = result;
-      } catch (rawError) {
-        console.error('Raw SQL error:', rawError);
-        throw rawError;
-      }
-    }
-
-    // Update preadmission status
-    try {
-      await prisma.preadmission.update({
-        where: { id: parseInt(preadmissionId) },
-        data: { status: 'follow_up' },
-      });
-    } catch (e) {
-      console.warn('Could not update status:', e.message);
-    }
+        counselor: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
 
     return NextResponse.json({ success: true, followUp }, { status: 201 });
   } catch (error) {

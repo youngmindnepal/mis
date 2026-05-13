@@ -1,7 +1,13 @@
 // app/preadmission/page.jsx
 'use client';
 
-import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -67,27 +73,47 @@ const STATUS_OPTIONS = [
   {
     value: 'pending',
     label: 'Pending',
-    color: 'bg-yellow-100 text-yellow-800',
+    color: 'bg-yellow-100 text-yellow-800 border-yellow-300',
   },
   {
     value: 'contacted',
     label: 'Contacted',
-    color: 'bg-blue-100 text-blue-800',
+    color: 'bg-blue-100 text-blue-800 border-blue-300',
   },
   {
     value: 'follow_up',
     label: 'Follow Up',
-    color: 'bg-orange-100 text-orange-800',
+    color: 'bg-orange-100 text-orange-800 border-orange-300',
   },
   {
     value: 'enrolled',
     label: 'Enrolled',
-    color: 'bg-green-100 text-green-800',
+    color: 'bg-green-100 text-green-800 border-green-300',
   },
-  { value: 'rejected', label: 'Rejected', color: 'bg-red-100 text-red-800' },
+  {
+    value: 'rejected',
+    label: 'Rejected',
+    color: 'bg-red-100 text-red-800 border-red-300',
+  },
 ];
 
-function LoadingState() {
+const OUTCOME_OPTIONS = [
+  'interested',
+  'not_interested',
+  'will_think',
+  'enrolled',
+  'no_answer',
+];
+
+const getTodayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
+    2,
+    '0'
+  )}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+function LoadingSkeleton() {
   return (
     <div className="p-6">
       <div className="animate-pulse space-y-4">
@@ -103,595 +129,475 @@ function LoadingState() {
   );
 }
 
-// ==================== IMPORT/EXPORT BAR ====================
-function ImportExportBar({
-  onExport,
-  onImport,
-  onDownloadTemplate,
-  importing,
-}) {
-  const fileInputRef = useRef(null);
-  return (
-    <>
-      <button
-        onClick={onDownloadTemplate}
-        className="px-3 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700 flex items-center gap-1"
-        title="Download Excel template"
-      >
-        <Icons.FileDown size={14} /> Template
-      </button>
-      <button
-        onClick={onExport}
-        className="px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-1"
-        title="Export to Excel"
-      >
-        <Icons.Download size={14} /> Export
-      </button>
-      <button
-        onClick={() => fileInputRef.current?.click()}
-        disabled={importing}
-        className="px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
-        title="Import from Excel"
-      >
-        {importing ? (
-          <Icons.Loader2 size={14} className="animate-spin" />
-        ) : (
-          <Icons.Upload size={14} />
-        )}{' '}
-        Import
-      </button>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".xlsx,.xls"
-        onChange={onImport}
-        className="hidden"
-      />
-    </>
-  );
-}
-
-// ==================== IMPORT RESULT MODAL ====================
-function ImportResultModal({ isOpen, onClose, result }) {
-  if (!isOpen || !result) return null;
-  return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 mx-4"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold">Import Results</h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <Icons.X size={18} />
-          </button>
-        </div>
-        <div className="space-y-3">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-2xl font-bold text-gray-900">{result.total}</p>
-              <p className="text-xs text-gray-500">Total Rows</p>
-            </div>
-            <div className="bg-green-50 rounded-lg p-3">
-              <p className="text-2xl font-bold text-green-600">
-                {result.imported}
-              </p>
-              <p className="text-xs text-gray-500">Imported</p>
-            </div>
-            <div className="bg-yellow-50 rounded-lg p-3">
-              <p className="text-2xl font-bold text-yellow-600">
-                {result.skipped}
-              </p>
-              <p className="text-xs text-gray-500">Skipped</p>
-            </div>
-          </div>
-          {result.errors?.length > 0 && (
-            <div>
-              <p className="text-sm font-semibold text-gray-700 mb-2">
-                Errors:
-              </p>
-              <div className="max-h-40 overflow-y-auto space-y-1">
-                {result.errors.map((err, i) => (
-                  <p
-                    key={i}
-                    className="text-xs text-red-600 bg-red-50 rounded p-2"
-                  >
-                    {err}
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        <button
-          onClick={onClose}
-          className="mt-4 w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-        >
-          Close
-        </button>
-      </motion.div>
-    </div>
-  );
-}
-
-// ==================== VIEW DETAIL MODAL ====================
-function ViewDetailModal({ isOpen, onClose, preadmission }) {
-  if (!isOpen || !preadmission) return null;
-  const referral = REFERRAL_SOURCES.find(
-    (r) => r.value === preadmission.referralSource
-  );
-  const status = STATUS_OPTIONS.find((s) => s.value === preadmission.status);
-  const RefIcon = referral ? Icons[referral.icon] : null;
-  const fd = (d) =>
-    d
-      ? new Date(d).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      : 'N/A';
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-6 mx-4"
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold flex items-center gap-2">
-            <Icons.Eye size={20} className="text-teal-600" />
-            Student Details
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <Icons.X size={18} />
-          </button>
-        </div>
-        <div className="space-y-4">
-          <div className="bg-teal-50 rounded-xl p-4">
-            <h2 className="text-xl font-bold text-teal-900">
-              {preadmission.studentName}
-            </h2>
-            <span
-              className={`inline-block px-3 py-1 rounded-full text-xs font-medium mt-2 ${status?.color}`}
-            >
-              {status?.label}
-            </span>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 uppercase font-semibold">
-                Phone
-              </p>
-              <p className="text-sm font-medium flex items-center gap-1 mt-1">
-                <Icons.Phone size={14} className="text-gray-400" />
-                {preadmission.phone}
-              </p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 uppercase font-semibold">
-                Email
-              </p>
-              <p className="text-sm font-medium flex items-center gap-1 mt-1">
-                <Icons.Mail size={14} className="text-gray-400" />
-                {preadmission.email || 'N/A'}
-              </p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 uppercase font-semibold">
-                Address
-              </p>
-              <p className="text-sm font-medium flex items-center gap-1 mt-1">
-                <Icons.MapPin size={14} className="text-gray-400" />
-                {preadmission.address || 'N/A'}
-              </p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 uppercase font-semibold">
-                Inquiry Date
-              </p>
-              <p className="text-sm font-medium flex items-center gap-1 mt-1">
-                <Icons.Calendar size={14} className="text-gray-400" />
-                {fd(preadmission.date)}
-              </p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 uppercase font-semibold">
-                Previous College
-              </p>
-              <p className="text-sm font-medium mt-1">
-                {preadmission.previousCollege || 'N/A'}
-              </p>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 uppercase font-semibold">
-                GPA
-              </p>
-              <p className="text-sm font-medium mt-1">
-                {preadmission.gpa != null ? preadmission.gpa : 'N/A'}
-              </p>
-            </div>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
-              Departments
-            </p>
-            <div className="flex flex-wrap gap-1">
-              {preadmission.departments?.map((d) => (
-                <span
-                  key={d.departmentId}
-                  className="text-xs bg-teal-100 text-teal-700 px-2 py-1 rounded-full"
-                >
-                  {d.department?.name}
-                </span>
-              ))}
-            </div>
-          </div>
-          <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500 uppercase font-semibold mb-2">
-              Referral
-            </p>
-            <div className="flex items-center gap-2">
-              {RefIcon && (
-                <RefIcon size={16} className={referral?.color.split(' ')[0]} />
-              )}
-              <span className="text-sm font-medium">
-                {referral?.label || 'None'}
-              </span>
-              {preadmission.referralName && (
-                <span className="text-sm text-gray-500">
-                  - {preadmission.referralName}
-                </span>
-              )}
-            </div>
-            {preadmission.agent && (
-              <div className="mt-2 p-2 bg-teal-50 rounded-lg border border-teal-200">
-                <p className="text-sm font-semibold text-teal-800">
-                  Agent: {preadmission.agent.name}
-                </p>
-                {preadmission.agent.company && (
-                  <p className="text-xs text-teal-600">
-                    {preadmission.agent.company}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-          {preadmission.notes && (
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-xs text-gray-500 uppercase font-semibold mb-1">
-                Notes
-              </p>
-              <p className="text-sm">{preadmission.notes}</p>
-            </div>
-          )}
-          <p className="text-xs text-gray-400">
-            Created: {fd(preadmission.createdAt)} | Counselor:{' '}
-            {preadmission.counselor?.name || 'N/A'}
-          </p>
-        </div>
-      </motion.div>
-    </div>
-  );
-}
-
-// ==================== FOLLOW-UP LIST MODAL (with inline form) ====================
-function FollowUpListModal({
+function StudentFormModal({
   isOpen,
   onClose,
-  preadmissionId,
-  preadmissionName,
-  onFollowUpCreated,
+  onSubmit,
+  initialData,
+  departments,
+  agents,
+  loading,
 }) {
-  const [followUps, setFollowUps] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
-    followUpDate: new Date().toISOString().split('T')[0],
+    studentName: '',
+    phone: '',
+    address: '',
+    email: '',
+    date: '',
+    referralSource: '',
+    referralName: '',
+    agentId: '',
+    previousCollege: '',
+    gpa: '',
     notes: '',
-    outcome: '',
+    departmentIds: [],
   });
-  const [successMsg, setSuccessMsg] = useState(null);
-  const [errorMsg, setErrorMsg] = useState(null);
-
-  const fetchFollowUps = useCallback(() => {
-    if (!preadmissionId) return;
-    setLoading(true);
-    fetch(`/api/followups?preadmissionId=${preadmissionId}`)
-      .then((r) => r.json())
-      .then((d) => setFollowUps(d.followUps || []))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [preadmissionId]);
-
+  const [errors, setErrors] = useState({});
   useEffect(() => {
     if (isOpen) {
-      fetchFollowUps();
-      setShowForm(false);
-      setForm({
-        followUpDate: new Date().toISOString().split('T')[0],
-        notes: '',
-        outcome: '',
-      });
+      const today = getTodayStr();
+      setForm(
+        initialData
+          ? {
+              studentName: initialData.studentName || '',
+              phone: initialData.phone || '',
+              address: initialData.address || '',
+              email: initialData.email || '',
+              date: initialData.date
+                ? new Date(initialData.date).toISOString().split('T')[0]
+                : today,
+              referralSource: initialData.referralSource || '',
+              referralName: initialData.referralName || '',
+              agentId: initialData.agentId || '',
+              previousCollege: initialData.previousCollege || '',
+              gpa: initialData.gpa != null ? String(initialData.gpa) : '',
+              notes: initialData.notes || '',
+              departmentIds:
+                initialData.departments?.map((d) => d.departmentId) || [],
+            }
+          : {
+              studentName: '',
+              phone: '',
+              address: '',
+              email: '',
+              date: today,
+              referralSource: '',
+              referralName: '',
+              agentId: '',
+              previousCollege: '',
+              gpa: '',
+              notes: '',
+              departmentIds: [],
+            }
+      );
+      setErrors({});
     }
-  }, [isOpen, fetchFollowUps]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const res = await fetch('/api/followups', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, preadmissionId }),
-      });
-      if (res.ok) {
-        setSuccessMsg('Follow-up scheduled!');
-        setTimeout(() => setSuccessMsg(null), 3000);
-        setShowForm(false);
-        setForm({
-          followUpDate: new Date().toISOString().split('T')[0],
-          notes: '',
-          outcome: '',
-        });
-        fetchFollowUps();
-        if (onFollowUpCreated) onFollowUpCreated();
-      } else {
-        const err = await res.json();
-        setErrorMsg(err.error || 'Failed');
-        setTimeout(() => setErrorMsg(null), 3000);
-      }
-    } catch (e) {
-      setErrorMsg(e.message);
-      setTimeout(() => setErrorMsg(null), 3000);
-    } finally {
-      setSaving(false);
-    }
+  }, [isOpen, initialData]);
+  const validate = () => {
+    const errs = {};
+    if (!form.studentName.trim()) errs.studentName = 'Required';
+    if (!form.phone.trim()) errs.phone = 'Required';
+    if (form.departmentIds.length === 0)
+      errs.departmentIds = 'Select at least one';
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
   };
-
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+    onSubmit({ ...form, gpa: form.gpa ? parseFloat(form.gpa) : null });
+  };
+  const toggleDept = (id) =>
+    setForm((prev) => ({
+      ...prev,
+      departmentIds: prev.departmentIds.includes(id)
+        ? prev.departmentIds.filter((i) => i !== id)
+        : [...prev.departmentIds, id],
+    }));
   if (!isOpen) return null;
-  const fd = (d) =>
-    d
-      ? new Date(d).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        })
-      : 'N/A';
-
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center">
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
       <motion.div
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[85vh] overflow-hidden p-6 mx-4 flex flex-col"
+        className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6"
       >
-        <AnimatePresence>
-          {successMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-green-50 border border-green-300 text-green-800 px-4 py-2 rounded-lg shadow-lg text-sm"
-            >
-              <Icons.CheckCircle size={14} className="inline mr-1" />
-              {successMsg}
-            </motion.div>
-          )}
-          {errorMsg && (
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="absolute top-4 left-1/2 -translate-x-1/2 z-20 bg-red-50 border border-red-300 text-red-800 px-4 py-2 rounded-lg shadow-lg text-sm"
-            >
-              <Icons.AlertCircle size={14} className="inline mr-1" />
-              {errorMsg}
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <div className="flex items-center justify-between mb-4 flex-shrink-0">
+        <div className="flex justify-between items-center mb-4">
           <h3 className="text-lg font-bold flex items-center gap-2">
-            <Icons.CalendarClock size={20} className="text-blue-600" />
-            Follow-Ups: {preadmissionName}
+            <Icons.UserPlus size={20} className="text-teal-600" />
+            {initialData ? 'Edit Student' : 'Add New Student'}
           </h3>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowForm(!showForm)}
-              className={`px-3 py-1.5 text-xs rounded-lg flex items-center gap-1 transition-colors ${
-                showForm
-                  ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
-            >
-              <Icons.Plus size={14} />
-              {showForm ? 'Cancel' : 'Schedule'}
-            </button>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg"
-            >
-              <Icons.X size={18} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+          >
+            <Icons.X size={18} />
+          </button>
         </div>
-        <AnimatePresence>
-          {showForm && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden flex-shrink-0"
-            >
-              <form
-                onSubmit={handleSubmit}
-                className="bg-blue-50 rounded-xl p-4 mb-4 border border-blue-200 space-y-3"
-              >
-                <p className="text-sm font-semibold text-blue-900">
-                  Schedule New Follow-Up
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      Follow-Up Date *
-                    </label>
-                    <input
-                      type="date"
-                      value={form.followUpDate}
-                      onChange={(e) =>
-                        setForm({ ...form, followUpDate: e.target.value })
-                      }
-                      className="w-full rounded-lg border border-blue-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold mb-1">
-                      Outcome
-                    </label>
-                    <select
-                      value={form.outcome}
-                      onChange={(e) =>
-                        setForm({ ...form, outcome: e.target.value })
-                      }
-                      className="w-full rounded-lg border border-blue-300 px-3 py-2 text-sm bg-white"
-                    >
-                      <option value="">Select outcome...</option>
-                      <option value="interested">Interested</option>
-                      <option value="not_interested">Not Interested</option>
-                      <option value="will_think">Will Think About It</option>
-                      <option value="enrolled">Enrolled</option>
-                      <option value="no_answer">No Answer</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold mb-1">
-                    Notes
-                  </label>
-                  <textarea
-                    value={form.notes}
-                    onChange={(e) =>
-                      setForm({ ...form, notes: e.target.value })
-                    }
-                    placeholder="Follow-up notes..."
-                    rows={2}
-                    className="w-full rounded-lg border border-blue-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={saving}
-                    className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                  >
-                    {saving ? (
-                      <Icons.Loader2 size={14} className="animate-spin" />
-                    ) : (
-                      <Icons.Save size={14} />
-                    )}
-                    Save Follow-Up
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <div className="flex-1 overflow-y-auto">
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <Icons.Loader2 size={32} className="animate-spin text-blue-600" />
-            </div>
-          ) : followUps.length === 0 && !showForm ? (
-            <div className="text-center py-8 text-gray-500">
-              <Icons.CalendarClock
-                size={48}
-                className="text-gray-300 mx-auto mb-3"
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold mb-1">
+              Student Name *
+            </label>
+            <input
+              type="text"
+              value={form.studentName}
+              onChange={(e) =>
+                setForm({ ...form, studentName: e.target.value })
+              }
+              placeholder="Full name"
+              className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                errors.studentName ? 'border-red-500' : 'border-gray-300'
+              } focus:ring-2 focus:ring-teal-500 focus:outline-none`}
+            />
+            {errors.studentName && (
+              <p className="text-xs text-red-500 mt-1">{errors.studentName}</p>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                Phone *
+              </label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="9841xxxxxx"
+                className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                  errors.phone ? 'border-red-500' : 'border-gray-300'
+                } focus:ring-2 focus:ring-teal-500 focus:outline-none`}
               />
-              <p>No follow-ups yet</p>
-              <button
-                onClick={() => setShowForm(true)}
-                className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm"
-              >
-                Schedule First Follow-Up
-              </button>
+              {errors.phone && (
+                <p className="text-xs text-red-500 mt-1">{errors.phone}</p>
+              )}
             </div>
-          ) : (
-            <div className="space-y-2">
-              {followUps.map((fu) => (
-                <div
-                  key={fu.id}
-                  className={`p-3 rounded-lg border ${
-                    fu.status === 'completed'
-                      ? 'bg-green-50 border-green-200'
-                      : fu.status === 'cancelled'
-                      ? 'bg-red-50 border-red-200'
-                      : 'bg-yellow-50 border-yellow-200'
+            <div>
+              <label className="block text-xs font-semibold mb-1">Email</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="email@example.com"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Address</label>
+            <input
+              type="text"
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="Address"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"
+            />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs font-semibold mb-1">Date</label>
+              <input
+                type="date"
+                value={form.date}
+                onChange={(e) => setForm({ ...form, date: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                Prev College
+              </label>
+              <input
+                type="text"
+                value={form.previousCollege}
+                onChange={(e) =>
+                  setForm({ ...form, previousCollege: e.target.value })
+                }
+                placeholder="College"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">GPA</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="4"
+                value={form.gpa}
+                onChange={(e) => setForm({ ...form, gpa: e.target.value })}
+                placeholder="3.5"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Agent</label>
+            <select
+              value={form.agentId}
+              onChange={(e) => setForm({ ...form, agentId: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+            >
+              <option value="">No Agent</option>
+              {agents
+                .filter((a) => a.status === 'active')
+                .map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                    {a.company ? ` (${a.company})` : ''}
+                  </option>
+                ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-2">
+              Departments *{' '}
+              {form.departmentIds.length > 0 && (
+                <span className="text-teal-600">
+                  ({form.departmentIds.length})
+                </span>
+              )}
+            </label>
+            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1">
+              {departments.map((dept) => (
+                <button
+                  key={dept.id}
+                  type="button"
+                  onClick={() => toggleDept(dept.id)}
+                  className={`p-2.5 rounded-lg border text-sm text-left transition-colors ${
+                    form.departmentIds.includes(dept.id)
+                      ? 'bg-teal-50 border-teal-500 text-teal-700 font-medium'
+                      : 'bg-white border-gray-300 text-gray-600 hover:border-teal-300'
                   }`}
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm font-semibold">
-                        {new Date(fu.followUpDate).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                      </p>
-                      {fu.outcome && (
-                        <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${
-                            fu.outcome === 'enrolled'
-                              ? 'bg-green-200 text-green-800'
-                              : fu.outcome === 'interested'
-                              ? 'bg-blue-200 text-blue-800'
-                              : 'bg-gray-200 text-gray-700'
-                          }`}
-                        >
-                          {fu.outcome.replace('_', ' ')}
-                        </span>
-                      )}
-                    </div>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        fu.status === 'completed'
-                          ? 'bg-green-100 text-green-700'
-                          : fu.status === 'cancelled'
-                          ? 'bg-red-100 text-red-700'
-                          : 'bg-yellow-100 text-yellow-700'
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                        form.departmentIds.includes(dept.id)
+                          ? 'bg-teal-600 border-teal-600'
+                          : 'border-gray-400'
                       }`}
                     >
-                      {fu.status}
-                    </span>
+                      {form.departmentIds.includes(dept.id) && (
+                        <Icons.Check size={10} className="text-white" />
+                      )}
+                    </div>
+                    <span className="truncate">{dept.name}</span>
                   </div>
-                  {fu.notes && (
-                    <p className="text-xs text-gray-600 mt-2">{fu.notes}</p>
-                  )}
-                  {fu.counselor && (
-                    <p className="text-xs text-gray-400 mt-1">
-                      By: {fu.counselor.name}
-                    </p>
-                  )}
-                </div>
+                </button>
               ))}
             </div>
+            {errors.departmentIds && (
+              <p className="text-xs text-red-500 mt-1">
+                {errors.departmentIds}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-2">
+              Referral Source
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              {REFERRAL_SOURCES.map((source) => {
+                const IconComp = Icons[source.icon];
+                return (
+                  <button
+                    key={source.value}
+                    type="button"
+                    onClick={() =>
+                      setForm({
+                        ...form,
+                        referralSource:
+                          form.referralSource === source.value
+                            ? ''
+                            : source.value,
+                      })
+                    }
+                    className={`p-2 rounded-lg border text-xs text-center transition-colors ${
+                      form.referralSource === source.value
+                        ? 'bg-teal-50 border-teal-500 font-medium'
+                        : 'bg-white border-gray-300 hover:border-teal-300'
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-1">
+                      {IconComp && (
+                        <IconComp
+                          size={16}
+                          className={source.color.split(' ')[0]}
+                        />
+                      )}
+                      <span className="text-gray-700">{source.label}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {form.referralSource === 'referred_by' && (
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                Referred By
+              </label>
+              <input
+                type="text"
+                value={form.referralName}
+                onChange={(e) =>
+                  setForm({ ...form, referralName: e.target.value })
+                }
+                placeholder="Person's name"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              />
+            </div>
           )}
+          <div>
+            <label className="block text-xs font-semibold mb-1">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Any additional notes..."
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? (
+                <Icons.Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Icons.Save size={14} />
+              )}
+              {initialData ? 'Update' : 'Save'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
+// ==================== FOLLOW-UP FORM MODAL ====================
+function FollowUpFormModal({
+  isOpen,
+  onClose,
+  onSubmit,
+  studentName,
+  loading,
+}) {
+  const [form, setForm] = useState({
+    followUpDate: getTodayStr(),
+    outcome: '',
+    notes: '',
+  });
+  useEffect(() => {
+    if (isOpen)
+      setForm({ followUpDate: getTodayStr(), outcome: '', notes: '' });
+  }, [isOpen]);
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!form.followUpDate) return;
+    onSubmit(form);
+  };
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[85] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <motion.div
+        initial={{ scale: 0.9 }}
+        animate={{ scale: 1 }}
+        className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <Icons.CalendarClock size={20} className="text-blue-600" /> Add
+            Follow-up
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+          >
+            <Icons.X size={18} />
+          </button>
         </div>
+        {studentName && (
+          <p className="text-sm text-gray-500 mb-4">
+            For: <strong>{studentName}</strong>
+          </p>
+        )}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold mb-1">Date *</label>
+            <input
+              type="date"
+              value={form.followUpDate}
+              onChange={(e) =>
+                setForm({ ...form, followUpDate: e.target.value })
+              }
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">Outcome</label>
+            <select
+              value={form.outcome}
+              onChange={(e) => setForm({ ...form, outcome: e.target.value })}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+            >
+              <option value="">Select...</option>
+              {OUTCOME_OPTIONS.map((o) => (
+                <option key={o} value={o}>
+                  {o.replace('_', ' ')}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1">
+              Notes / Remarks
+            </label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Follow-up notes..."
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? (
+                <Icons.Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Icons.Save size={14} />
+              )}{' '}
+              Save Follow-up
+            </button>
+          </div>
+        </form>
       </motion.div>
     </div>
   );
@@ -704,95 +610,105 @@ export default function PreadmissionPage() {
   const [departments, setDepartments] = useState([]);
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingData, setEditingData] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
-  const [agentFilter, setAgentFilter] = useState('');
-  const [referralFilter, setReferralFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({ total: 0, totalPages: 0 });
   const [successMsg, setSuccessMsg] = useState(null);
   const [errorMsg, setErrorMsg] = useState(null);
-  const [deleteModal, setDeleteModal] = useState({ isOpen: false, id: null });
+  const [deleteId, setDeleteId] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [viewStudent, setViewStudent] = useState(null);
-  const [showFollowUpList, setShowFollowUpList] = useState(false);
-  const [followUpListData, setFollowUpListData] = useState({
-    id: null,
-    name: '',
+  const [allFollowUps, setAllFollowUps] = useState([]);
+  const [followUpsLoading, setFollowUpsLoading] = useState(false);
+  const [showFollowUpPanel, setShowFollowUpPanel] = useState(false);
+  const [activeFollowUpRow, setActiveFollowUpRow] = useState(null);
+  const [followUpForm, setFollowUpForm] = useState({
+    followUpDate: getTodayStr(),
+    outcome: '',
+    notes: '',
   });
-  const [showAgentList, setShowAgentList] = useState(false);
-  const [showAgentForm, setShowAgentForm] = useState(false);
-  const [editingAgent, setEditingAgent] = useState(null);
-  const [agentSaving, setAgentSaving] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState(null);
-  const [showImportResult, setShowImportResult] = useState(false);
+  const [followUpSaving, setFollowUpSaving] = useState(null);
+  const [followUpDeleting, setFollowUpDeleting] = useState(null);
+  const [panelCounsellorFilter, setPanelCounsellorFilter] = useState('');
+  const [panelDateFrom, setPanelDateFrom] = useState('');
+  const [panelDateTo, setPanelDateTo] = useState('');
 
-  const hasRead = can('admission', 'read');
-  const hasCreate = can('admission', 'create');
+  // ✅ Separate modal for follow-up from panel
+  const [showFollowUpModal, setShowFollowUpModal] = useState(false);
+  const [followUpModalData, setFollowUpModalData] = useState({
+    preadmissionId: null,
+    studentName: '',
+  });
+
+  const hasRead = can('admission', 'read'),
+    hasCreate = can('admission', 'create'),
+    hasUpdate = can('admission', 'update'),
+    hasDelete = can('admission', 'delete');
 
   const fetchAgents = useCallback(async () => {
     try {
-      const res = await fetch('/api/agents');
-      if (res.ok) setAgents((await res.json()).agents || []);
+      const r = await fetch('/api/agents');
+      if (r.ok) setAgents((await r.json()).agents || []);
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const r = await fetch('/api/departments');
+      if (r.ok) setDepartments((await r.json()).departments || []);
     } catch (e) {
       console.error(e);
     }
   }, []);
 
-  const fetchData = useCallback(async () => {
-    const [dRes] = await Promise.all([
-      fetch('/api/departments'),
-      fetchAgents(),
-    ]);
-    if (dRes.ok) setDepartments((await dRes.json()).departments || []);
-  }, [fetchAgents]);
-
   const fetchPreadmissions = useCallback(async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' });
-      if (search) params.append('search', search);
-      if (statusFilter) params.append('status', statusFilter);
-      if (departmentFilter) params.append('departmentId', departmentFilter);
-      if (agentFilter) params.append('agentId', agentFilter);
-      if (referralFilter) params.append('referralSource', referralFilter);
-      if (dateFrom) params.append('dateFrom', dateFrom);
-      if (dateTo) params.append('dateTo', dateTo);
-      const res = await fetch(`/api/preadmissions?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setPreadmissions(data.preadmissions || []);
-        setPagination(data.pagination);
-      }
+      const p = new URLSearchParams({ limit: '1000' });
+      if (search) p.append('search', search);
+      if (statusFilter) p.append('status', statusFilter);
+      if (departmentFilter) p.append('departmentId', departmentFilter);
+      if (dateFrom) p.append('dateFrom', dateFrom);
+      if (dateTo) p.append('dateTo', dateTo);
+      const r = await fetch(`/api/preadmissions?${p}`);
+      if (r.ok) setPreadmissions((await r.json()).preadmissions || []);
     } catch (e) {
       console.error(e);
     } finally {
       setLoading(false);
     }
-  }, [
-    page,
-    search,
-    statusFilter,
-    departmentFilter,
-    agentFilter,
-    referralFilter,
-    dateFrom,
-    dateTo,
-  ]);
+  }, [search, statusFilter, departmentFilter, dateFrom, dateTo]);
+
+  const fetchAllFollowUps = useCallback(async () => {
+    setFollowUpsLoading(true);
+    try {
+      const r = await fetch('/api/followups?limit=1000');
+      if (r.ok) {
+        const data = await r.json();
+        setAllFollowUps(data.followUps || data || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFollowUpsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchDepartments();
+    fetchAgents();
+  }, [fetchDepartments, fetchAgents]);
   useEffect(() => {
-    if (hasRead) fetchPreadmissions();
-  }, [hasRead, fetchPreadmissions]);
+    if (hasRead) {
+      fetchPreadmissions();
+      fetchAllFollowUps();
+    }
+  }, [hasRead, fetchPreadmissions, fetchAllFollowUps]);
 
   const showMsg = (m, t = 'success') => {
     if (t === 'success') {
@@ -803,46 +719,41 @@ export default function PreadmissionPage() {
       setTimeout(() => setErrorMsg(null), 3000);
     }
   };
-
   const handleSubmit = async (fd) => {
     setSaving(true);
     try {
       const url = editingData
         ? `/api/preadmissions/${editingData.id}`
         : '/api/preadmissions';
-      const res = await fetch(url, {
+      const r = await fetch(url, {
         method: editingData ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(fd),
       });
-      if (res.ok) {
-        showMsg(editingData ? 'Updated!' : 'Student added!');
+      if (r.ok) {
+        showMsg(editingData ? 'Updated!' : 'Added!');
         setShowForm(false);
         setEditingData(null);
         fetchPreadmissions();
-      } else {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed');
-      }
+      } else throw new Error((await r.json()).error || 'Failed');
     } catch (e) {
       showMsg(e.message, 'error');
     } finally {
       setSaving(false);
     }
   };
-
-  const confirmDelete = async () => {
-    if (!deleteModal.id) return;
+  const handleDelete = async () => {
+    if (!deleteId) return;
     setIsDeleting(true);
     try {
-      const res = await fetch(`/api/preadmissions/${deleteModal.id}`, {
+      const r = await fetch(`/api/preadmissions/${deleteId}`, {
         method: 'DELETE',
       });
-      if (res.ok) {
+      if (r.ok) {
         showMsg('Deleted!');
-        setDeleteModal({ isOpen: false, id: null });
+        setDeleteId(null);
         fetchPreadmissions();
-      } else throw new Error('Failed');
+      } else throw new Error((await r.json()).error || 'Failed');
     } catch (e) {
       showMsg(e.message, 'error');
     } finally {
@@ -850,25 +761,214 @@ export default function PreadmissionPage() {
     }
   };
 
-  const handleFollowUpClick = (preadmission) => {
-    setFollowUpListData({
-      id: preadmission.id,
-      name: preadmission.studentName,
-    });
-    setShowFollowUpList(true);
+  // ✅ Submit follow-up from modal (panel)
+  const handleFollowUpModalSubmit = async (formData) => {
+    if (!followUpModalData.preadmissionId) return;
+    setFollowUpSaving(followUpModalData.preadmissionId);
+    try {
+      const r = await fetch('/api/followups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...formData,
+          preadmissionId: followUpModalData.preadmissionId,
+        }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        showMsg('Follow-up added!');
+        setShowFollowUpModal(false);
+        setFollowUpModalData({ preadmissionId: null, studentName: '' });
+        fetchAllFollowUps();
+        fetchPreadmissions();
+        await fetch(`/api/preadmissions/${followUpModalData.preadmissionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'follow_up' }),
+        });
+        fetchPreadmissions();
+      } else {
+        showMsg(data.error || data.message || 'Failed', 'error');
+      }
+    } catch (e) {
+      showMsg(e.message, 'error');
+    } finally {
+      setFollowUpSaving(null);
+    }
   };
 
+  // ✅ Submit follow-up from inline form (main table)
+  const handleAddFollowUp = async (preadmissionId) => {
+    if (!followUpForm.followUpDate) return;
+    setFollowUpSaving(preadmissionId);
+    try {
+      const r = await fetch('/api/followups', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...followUpForm, preadmissionId }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        showMsg('Follow-up added!');
+        setActiveFollowUpRow(null);
+        setFollowUpForm({
+          followUpDate: getTodayStr(),
+          outcome: '',
+          notes: '',
+        });
+        fetchAllFollowUps();
+        fetchPreadmissions();
+        await fetch(`/api/preadmissions/${preadmissionId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'follow_up' }),
+        });
+        fetchPreadmissions();
+      } else {
+        showMsg(data.error || data.message || 'Failed', 'error');
+      }
+    } catch (e) {
+      showMsg(e.message, 'error');
+    } finally {
+      setFollowUpSaving(null);
+    }
+  };
+
+  const handleFollowUpDelete = async (followUpId) => {
+    if (!confirm('Delete this follow-up?')) return;
+    setFollowUpDeleting(followUpId);
+    try {
+      const r = await fetch(`/api/followups/${followUpId}`, {
+        method: 'DELETE',
+      });
+      if (r.ok) {
+        showMsg('Follow-up deleted!');
+        fetchAllFollowUps();
+        fetchPreadmissions();
+      }
+    } catch (e) {
+      showMsg(e.message, 'error');
+    } finally {
+      setFollowUpDeleting(null);
+    }
+  };
   const clearFilters = () => {
     setSearch('');
     setStatusFilter('');
     setDepartmentFilter('');
-    setAgentFilter('');
-    setReferralFilter('');
     setDateFrom('');
     setDateTo('');
-    setPage(1);
   };
 
+  const stats = useMemo(
+    () => ({
+      total: preadmissions.length,
+      pending: preadmissions.filter((p) => p.status === 'pending').length,
+      enrolled: preadmissions.filter((p) => p.status === 'enrolled').length,
+      thisMonth: preadmissions.filter((p) => {
+        const d = new Date(p.date),
+          n = new Date();
+        return (
+          d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear()
+        );
+      }).length,
+    }),
+    [preadmissions]
+  );
+
+  const allCounsellors = useMemo(() => {
+    const names = new Set();
+    allFollowUps.forEach((fu) => {
+      if (fu.counselor?.name) names.add(fu.counselor.name);
+    });
+    return [...names].sort();
+  }, [allFollowUps]);
+
+  const filteredFollowUps = useMemo(
+    () =>
+      allFollowUps.filter((fu) => {
+        if (
+          panelCounsellorFilter &&
+          fu.counselor?.name !== panelCounsellorFilter
+        )
+          return false;
+        if (
+          panelDateFrom &&
+          new Date(fu.followUpDate) < new Date(panelDateFrom)
+        )
+          return false;
+        if (
+          panelDateTo &&
+          new Date(fu.followUpDate) > new Date(panelDateTo + 'T23:59:59')
+        )
+          return false;
+        return true;
+      }),
+    [allFollowUps, panelCounsellorFilter, panelDateFrom, panelDateTo]
+  );
+
+  const counsellorStats = useMemo(() => {
+    const st = {};
+    filteredFollowUps.forEach((fu) => {
+      const name = fu.counselor?.name || 'Unknown';
+      const dk = new Date(fu.followUpDate).toISOString().split('T')[0];
+      if (!st[name]) st[name] = { name, total: 0, dates: {} };
+      st[name].total++;
+      st[name].dates[dk] = (st[name].dates[dk] || 0) + 1;
+    });
+    return Object.values(st).sort((a, b) => a.name.localeCompare(b.name));
+  }, [filteredFollowUps]);
+
+  const allDates = useMemo(() => {
+    const d = new Set();
+    filteredFollowUps.forEach((fu) =>
+      d.add(new Date(fu.followUpDate).toISOString().split('T')[0])
+    );
+    return [...d].sort();
+  }, [filteredFollowUps]);
+
+  const panelFollowUpsByStudent = useMemo(() => {
+    const m = {};
+    filteredFollowUps.forEach((fu) => {
+      if (!m[fu.preadmissionId]) m[fu.preadmissionId] = [];
+      m[fu.preadmissionId].push(fu);
+    });
+    return m;
+  }, [filteredFollowUps]);
+
+  const sortedPanelStudentIds = useMemo(
+    () =>
+      Object.keys(panelFollowUpsByStudent).sort((a, b) => {
+        const sa = preadmissions.find((p) => p.id === parseInt(a));
+        const sb = preadmissions.find((p) => p.id === parseInt(b));
+        return (sa?.studentName || '').localeCompare(sb?.studentName || '');
+      }),
+    [panelFollowUpsByStudent, preadmissions]
+  );
+
+  const mainFollowUpsByStudent = useMemo(() => {
+    const m = {};
+    allFollowUps.forEach((fu) => {
+      if (!m[fu.preadmissionId]) m[fu.preadmissionId] = [];
+      m[fu.preadmissionId].push(fu);
+    });
+    return m;
+  }, [allFollowUps]);
+
+  const sortedPreadmissions = useMemo(
+    () =>
+      [...preadmissions].sort((a, b) => {
+        const aHas = (mainFollowUpsByStudent[a.id]?.length || 0) > 0;
+        const bHas = (mainFollowUpsByStudent[b.id]?.length || 0) > 0;
+        if (aHas && !bHas) return -1;
+        if (!aHas && bHas) return 1;
+        return (a.studentName || '').localeCompare(b.studentName || '');
+      }),
+    [preadmissions, mainFollowUpsByStudent]
+  );
+
+  const hasActiveFilters =
+    search || statusFilter || departmentFilter || dateFrom || dateTo;
   const fd = (d) =>
     d
       ? new Date(d).toLocaleDateString('en-US', {
@@ -877,156 +977,37 @@ export default function PreadmissionPage() {
           year: 'numeric',
         })
       : 'N/A';
-  const stats = useMemo(
-    () => ({
-      total: pagination.total || 0,
-      pending: preadmissions.filter((p) => p.status === 'pending').length,
-      enrolled: preadmissions.filter((p) => p.status === 'enrolled').length,
-      agents: agents.filter((a) => a.status === 'active').length,
-    }),
-    [preadmissions, pagination, agents]
-  );
 
-  const handleAgentSubmit = async (fd) => {
-    setAgentSaving(true);
-    try {
-      const url = editingAgent
-        ? `/api/agents/${editingAgent.id}`
-        : '/api/agents';
-      const res = await fetch(url, {
-        method: editingAgent ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(fd),
-      });
-      if (res.ok) {
-        showMsg(editingAgent ? 'Agent updated!' : 'Agent added!');
-        setShowAgentForm(false);
-        setEditingAgent(null);
-        fetchAgents();
-      } else {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed');
-      }
-    } catch (e) {
-      showMsg(e.message, 'error');
-    } finally {
-      setAgentSaving(false);
-    }
+  // ✅ Open follow-up modal from panel
+  const openFollowUpModal = (studentId) => {
+    const student = preadmissions.find((p) => p.id === parseInt(studentId));
+    setFollowUpModalData({
+      preadmissionId: studentId,
+      studentName: student?.studentName || '',
+    });
+    setShowFollowUpModal(true);
   };
 
-  const handleAgentDelete = async (agentId) => {
-    try {
-      const res = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
-      if (res.ok) {
-        showMsg('Agent deleted!');
-        fetchAgents();
-      } else {
-        const err = await res.json();
-        throw new Error(err.error || 'Failed');
-      }
-    } catch (e) {
-      showMsg(e.message, 'error');
-    }
+  // ✅ Open inline follow-up form from main table
+  const openFollowUpInline = (studentId) => {
+    setFollowUpForm({ followUpDate: getTodayStr(), outcome: '', notes: '' });
+    setActiveFollowUpRow(activeFollowUpRow === studentId ? null : studentId);
   };
-
-  // ==================== EXCEL HANDLERS ====================
-  const handleExport = async () => {
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter) params.append('status', statusFilter);
-      if (departmentFilter) params.append('departmentId', departmentFilter);
-      if (agentFilter) params.append('agentId', agentFilter);
-      if (referralFilter) params.append('referralSource', referralFilter);
-      if (dateFrom) params.append('dateFrom', dateFrom);
-      if (dateTo) params.append('dateTo', dateTo);
-      const res = await fetch(`/api/preadmissions/export?${params}`);
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `preadmissions_${
-          new Date().toISOString().split('T')[0]
-        }.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        showMsg('Exported successfully!');
-      } else showMsg('Export failed', 'error');
-    } catch (e) {
-      showMsg('Export failed: ' + e.message, 'error');
-    }
-  };
-
-  const handleImport = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImporting(true);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/preadmissions/import', {
-        method: 'POST',
-        body: formData,
-      });
-      const result = await res.json();
-      if (res.ok) {
-        setImportResult(result);
-        setShowImportResult(true);
-        fetchPreadmissions();
-        fetchAgents();
-      } else showMsg(result.error || 'Import failed', 'error');
-    } catch (e) {
-      showMsg('Import failed: ' + e.message, 'error');
-    } finally {
-      setImporting(false);
-      e.target.value = '';
-    }
-  };
-
-  const handleDownloadTemplate = async () => {
-    try {
-      const res = await fetch('/api/preadmissions/template');
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'preadmission_template.xlsx';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      }
-    } catch (e) {
-      showMsg('Template download failed', 'error');
-    }
-  };
-
-  const hasActiveFilters =
-    search ||
-    statusFilter ||
-    departmentFilter ||
-    agentFilter ||
-    referralFilter ||
-    dateFrom ||
-    dateTo;
 
   if (permLoading)
     return (
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto p-6">
-          <LoadingState />
+          <LoadingSkeleton />
         </div>
       </div>
     );
   if (!hasRead)
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-red-50 border border-red-200 rounded-lg p-8 text-center max-w-md">
-          <Icons.Lock size={32} className="text-red-600 mx-auto mb-4" />
-          <h2 className="text-xl font-bold text-red-800">Access Denied</h2>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-8 text-center max-w-md">
+          <Icons.Lock size={48} className="text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-red-800 mb-2">Access Denied</h2>
         </div>
       </div>
     );
@@ -1036,15 +1017,15 @@ export default function PreadmissionPage() {
       <AnimatePresence>
         {successMsg && (
           <motion.div
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 50 }}
-            className="fixed top-20 right-6 z-50 bg-green-50 border-l-4 border-green-500 text-green-800 px-4 py-3 rounded-lg shadow-lg min-w-[280px]"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-4 right-4 z-[100] bg-green-50 border-l-4 border-green-500 text-green-800 px-4 py-3 rounded-lg shadow-lg min-w-[280px]"
           >
             <div className="flex items-center gap-2">
               <Icons.CheckCircle size={20} className="text-green-500" />
-              <span>{successMsg}</span>
-              <button onClick={() => setSuccessMsg(null)} className="ml-auto">
+              <span className="flex-1">{successMsg}</span>
+              <button onClick={() => setSuccessMsg(null)} className="p-1">
                 <Icons.X size={16} />
               </button>
             </div>
@@ -1052,15 +1033,15 @@ export default function PreadmissionPage() {
         )}
         {errorMsg && (
           <motion.div
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 50 }}
-            className="fixed top-20 right-6 z-50 bg-red-50 border-l-4 border-red-500 text-red-800 px-4 py-3 rounded-lg shadow-lg min-w-[280px]"
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-4 right-4 z-[100] bg-red-50 border-l-4 border-red-500 text-red-800 px-4 py-3 rounded-lg shadow-lg min-w-[280px]"
           >
             <div className="flex items-center gap-2">
               <Icons.AlertCircle size={20} className="text-red-500" />
-              <span>{errorMsg}</span>
-              <button onClick={() => setErrorMsg(null)} className="ml-auto">
+              <span className="flex-1">{errorMsg}</span>
+              <button onClick={() => setErrorMsg(null)} className="p-1">
                 <Icons.X size={16} />
               </button>
             </div>
@@ -1069,45 +1050,41 @@ export default function PreadmissionPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
-            <span>🏠</span>
-            <span>/</span>
-            <span className="text-gray-900">Preadmission</span>
+            <Icons.Home size={14} /> <span>/</span>{' '}
+            <span className="text-gray-900 font-medium">Preadmission</span>
           </div>
-          <div className="flex justify-between items-center flex-wrap gap-4">
+          <div className="flex justify-between items-center flex-wrap gap-3">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
                 Preadmission Management
               </h1>
               <p className="text-sm text-gray-500 mt-1">
-                {stats.total} inquiries • {stats.agents} agents
+                {stats.total} inquiries • {allFollowUps.length} follow-ups
               </p>
             </div>
-            <div className="flex gap-3 flex-wrap">
-              <ImportExportBar
-                onExport={handleExport}
-                onImport={handleImport}
-                onDownloadTemplate={handleDownloadTemplate}
-                importing={importing}
-              />
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => {
-                  setEditingAgent(null);
-                  setShowAgentList(true);
-                }}
-                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2"
+                onClick={() => setShowFollowUpPanel(!showFollowUpPanel)}
+                className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium ${
+                  showFollowUpPanel
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white border border-purple-300 text-purple-700 hover:bg-purple-50'
+                }`}
               >
-                <Icons.Briefcase size={18} />
-                Agents ({stats.agents})
+                <Icons.LayoutGrid size={16} />{' '}
+                {showFollowUpPanel ? 'Hide Panel' : 'Follow-up Panel'}
               </button>
               <button
-                onClick={fetchPreadmissions}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2"
+                onClick={() => {
+                  fetchPreadmissions();
+                  fetchAllFollowUps();
+                }}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 flex items-center gap-2 text-sm"
               >
-                <Icons.RefreshCw size={18} />
-                Refresh
+                <Icons.RefreshCw size={16} /> Refresh
               </button>
               {hasCreate && (
                 <button
@@ -1115,10 +1092,9 @@ export default function PreadmissionPage() {
                     setEditingData(null);
                     setShowForm(true);
                   }}
-                  className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-lg hover:from-teal-700 hover:to-emerald-700 flex items-center gap-2"
+                  className="px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-lg hover:from-teal-700 hover:to-emerald-700 flex items-center gap-2 text-sm font-medium"
                 >
-                  <Icons.Plus size={18} />
-                  Add Student
+                  <Icons.Plus size={16} /> Add Student
                 </button>
               )}
             </div>
@@ -1127,8 +1103,8 @@ export default function PreadmissionPage() {
       </div>
 
       {/* Stats */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
             {
               icon: Icons.Users,
@@ -1149,24 +1125,33 @@ export default function PreadmissionPage() {
               value: stats.enrolled,
             },
             {
-              icon: Icons.Briefcase,
-              color: 'bg-amber-100 text-amber-600',
-              label: 'Agents',
-              value: stats.agents,
+              icon: Icons.Calendar,
+              color: 'bg-blue-100 text-blue-600',
+              label: 'This Month',
+              value: stats.thisMonth,
+            },
+            {
+              icon: Icons.CalendarClock,
+              color: 'bg-purple-100 text-purple-600',
+              label: 'Follow-ups',
+              value: allFollowUps.length,
             },
           ].map((s, i) => (
-            <div key={i} className="bg-white rounded-lg p-4 shadow-sm border">
+            <div
+              key={i}
+              className="bg-white rounded-xl p-4 shadow-sm border hover:shadow-md transition-shadow"
+            >
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-10 h-10 ${
+                  className={`w-12 h-12 ${
                     s.color.split(' ')[0]
-                  } rounded-lg flex items-center justify-center`}
+                  } rounded-xl flex items-center justify-center`}
                 >
-                  <s.icon size={20} className={s.color.split(' ')[1]} />
+                  <s.icon size={22} className={s.color.split(' ')[1]} />
                 </div>
                 <div>
-                  <p className="text-xs text-gray-500">{s.label}</p>
-                  <p className="text-lg font-bold text-gray-900">{s.value}</p>
+                  <p className="text-xs text-gray-500 font-medium">{s.label}</p>
+                  <p className="text-xl font-bold text-gray-900">{s.value}</p>
                 </div>
               </div>
             </div>
@@ -1174,10 +1159,10 @@ export default function PreadmissionPage() {
         </div>
       </div>
 
-      {/* Search & Filters */}
+      {/* Filters */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4">
-        <div className="bg-white rounded-lg p-4 shadow-sm border space-y-3">
-          <div className="flex items-center gap-3 flex-wrap">
+        <div className="bg-white rounded-xl p-4 shadow-sm border space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="relative flex-1 min-w-[200px]">
               <Icons.Search
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
@@ -1187,20 +1172,14 @@ export default function PreadmissionPage() {
                 type="text"
                 placeholder="Search name, phone, email..."
                 value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(1);
-                }}
-                className="pl-10 pr-4 py-2 border rounded-lg w-full focus:ring-2 focus:ring-teal-500 text-sm"
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg w-full text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
               />
             </div>
             <select
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(1);
-              }}
-              className="px-3 py-2 border rounded-lg text-sm bg-white"
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white min-w-[130px]"
             >
               <option value="">All Status</option>
               {STATUS_OPTIONS.map((s) => (
@@ -1211,105 +1190,386 @@ export default function PreadmissionPage() {
             </select>
             <select
               value={departmentFilter}
-              onChange={(e) => {
-                setDepartmentFilter(e.target.value);
-                setPage(1);
-              }}
-              className="px-3 py-2 border rounded-lg text-sm bg-white"
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white min-w-[150px]"
             >
-              <option value="">All Depts</option>
+              <option value="">All Departments</option>
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
               ))}
             </select>
-            <select
-              value={agentFilter}
-              onChange={(e) => {
-                setAgentFilter(e.target.value);
-                setPage(1);
-              }}
-              className="px-3 py-2 border rounded-lg text-sm bg-white"
-            >
-              <option value="">All Agents</option>
-              {agents
-                .filter((a) => a.status === 'active')
-                .map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                    {a.company ? ` (${a.company})` : ''}
-                  </option>
-                ))}
-            </select>
-            <select
-              value={referralFilter}
-              onChange={(e) => {
-                setReferralFilter(e.target.value);
-                setPage(1);
-              }}
-              className="px-3 py-2 border rounded-lg text-sm bg-white"
-            >
-              <option value="">All Sources</option>
-              {REFERRAL_SOURCES.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
             <div className="flex items-center gap-2">
-              <Icons.Calendar size={14} className="text-gray-400" />
               <input
                 type="date"
                 value={dateFrom}
-                onChange={(e) => {
-                  setDateFrom(e.target.value);
-                  setPage(1);
-                }}
-                className="px-3 py-2 border rounded-lg text-sm w-36 focus:ring-2 focus:ring-teal-500"
-                placeholder="From"
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm w-36"
               />
-              <span className="text-gray-400 text-xs">to</span>
+              <span className="text-gray-400">to</span>
               <input
                 type="date"
                 value={dateTo}
-                onChange={(e) => {
-                  setDateTo(e.target.value);
-                  setPage(1);
-                }}
-                className="px-3 py-2 border rounded-lg text-sm w-36 focus:ring-2 focus:ring-teal-500"
-                placeholder="To"
+                onChange={(e) => setDateTo(e.target.value)}
+                className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm w-36"
               />
             </div>
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1"
+                className="px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1 border border-red-200"
               >
-                <Icons.X size={14} />
-                Clear
+                <Icons.X size={14} /> Clear All
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* TABLE */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+      {/* Follow-up Panel */}
+      <AnimatePresence>
+        {showFollowUpPanel && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4 overflow-hidden"
+          >
+            <div className="bg-white rounded-xl shadow-sm border p-4 space-y-4">
+              {/* Panel Filters */}
+              <div className="flex items-center gap-3 flex-wrap bg-purple-50 rounded-lg p-3 border border-purple-200">
+                <Icons.Filter size={16} className="text-purple-600" />
+                <select
+                  value={panelCounsellorFilter}
+                  onChange={(e) => setPanelCounsellorFilter(e.target.value)}
+                  className="px-3 py-2 border border-purple-300 rounded-lg text-sm bg-white min-w-[160px]"
+                >
+                  <option value="">All Counsellors</option>
+                  {allCounsellors.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="date"
+                  value={panelDateFrom}
+                  onChange={(e) => setPanelDateFrom(e.target.value)}
+                  className="px-3 py-2 border border-purple-300 rounded-lg text-sm w-36"
+                  placeholder="From"
+                />
+                <span className="text-purple-400 text-xs">to</span>
+                <input
+                  type="date"
+                  value={panelDateTo}
+                  onChange={(e) => setPanelDateTo(e.target.value)}
+                  className="px-3 py-2 border border-purple-300 rounded-lg text-sm w-36"
+                  placeholder="To"
+                />
+                {(panelCounsellorFilter || panelDateFrom || panelDateTo) && (
+                  <button
+                    onClick={() => {
+                      setPanelCounsellorFilter('');
+                      setPanelDateFrom('');
+                      setPanelDateTo('');
+                    }}
+                    className="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
+                  >
+                    <Icons.X size={14} /> Clear
+                  </button>
+                )}
+                <span className="text-xs text-purple-600 ml-auto">
+                  {filteredFollowUps.length} follow-up(s)
+                </span>
+              </div>
+
+              {/* Counsellor-wise Stats */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                  <Icons.Users size={16} className="text-teal-600" />{' '}
+                  Counsellor-wise Follow-up Count
+                </h3>
+                {counsellorStats.length === 0 ? (
+                  <p className="text-center text-gray-400 py-4 text-sm">
+                    No follow-ups match filter
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="text-left py-2 px-3 font-semibold text-gray-600 uppercase border-b">
+                            Counsellor
+                          </th>
+                          <th className="text-center py-2 px-3 font-semibold text-gray-600 uppercase border-b w-14">
+                            Total
+                          </th>
+                          {allDates.map((date) => (
+                            <th
+                              key={date}
+                              className="text-center py-2 px-2 font-semibold text-gray-600 uppercase border-b min-w-[70px]"
+                            >
+                              {new Date(date).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {counsellorStats.map((cs) => (
+                          <tr key={cs.name} className="hover:bg-gray-50">
+                            <td className="py-2 px-3 font-medium text-gray-900 border-b">
+                              {cs.name}
+                            </td>
+                            <td className="py-2 px-3 text-center font-bold text-teal-600 border-b">
+                              {cs.total}
+                            </td>
+                            {allDates.map((date) => (
+                              <td
+                                key={date}
+                                className="py-2 px-2 text-center border-b"
+                              >
+                                {cs.dates[date] || '-'}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                        <tr className="bg-gray-50 font-semibold">
+                          <td className="py-2 px-3 text-gray-700 border-b">
+                            Total
+                          </td>
+                          <td className="py-2 px-3 text-center text-teal-700 border-b">
+                            {filteredFollowUps.length}
+                          </td>
+                          {allDates.map((date) => {
+                            const total = counsellorStats.reduce(
+                              (sum, cs) => sum + (cs.dates[date] || 0),
+                              0
+                            );
+                            return (
+                              <td
+                                key={date}
+                                className="py-2 px-2 text-center border-b text-gray-700"
+                              >
+                                {total || '-'}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Student-wise Follow-ups */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                  <Icons.LayoutGrid size={16} className="text-purple-600" />{' '}
+                  Student-wise Follow-ups
+                </h3>
+                {followUpsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <Icons.Loader2
+                      size={24}
+                      className="animate-spin text-purple-600"
+                    />
+                  </div>
+                ) : sortedPanelStudentIds.length === 0 ? (
+                  <p className="text-center text-gray-400 py-4 text-sm">
+                    No follow-ups match filter
+                  </p>
+                ) : (
+                  <div
+                    className="overflow-x-auto"
+                    style={{ maxHeight: '350px' }}
+                  >
+                    <table className="w-full border-collapse text-xs">
+                      <thead className="sticky top-0 z-0">
+                        <tr className="bg-gray-50">
+                          <th className="sticky left-0 bg-gray-50 text-left py-2 px-3 font-semibold text-gray-600 uppercase border-b z-20 min-w-[150px]">
+                            Student
+                          </th>
+                          <th className="text-left py-2 px-3 font-semibold text-gray-600 uppercase border-b bg-gray-50">
+                            Phone
+                          </th>
+                          {allDates.map((date) => (
+                            <th
+                              key={date}
+                              className="text-center py-2 px-2 font-semibold text-gray-600 uppercase border-b bg-gray-50 min-w-[100px]"
+                            >
+                              {new Date(date).toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                              })}
+                            </th>
+                          ))}
+                          <th className="text-center py-2 px-2 font-semibold text-gray-600 uppercase border-b bg-gray-50">
+                            +
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {sortedPanelStudentIds.map((id) => {
+                          const fus = panelFollowUpsByStudent[id] || [];
+                          const student = preadmissions.find(
+                            (p) => p.id === parseInt(id)
+                          );
+                          const name = student?.studentName || `ID:${id}`;
+                          const phone = student?.phone || '';
+                          const fuMap = {};
+                          fus.forEach((fu) => {
+                            const dk = new Date(fu.followUpDate)
+                              .toISOString()
+                              .split('T')[0];
+                            if (!fuMap[dk]) fuMap[dk] = [];
+                            fuMap[dk].push(fu);
+                          });
+                          return (
+                            <tr key={id} className="hover:bg-gray-50">
+                              <td className="sticky left-0 bg-white py-2 px-3 font-medium text-gray-900 border-b z-0">
+                                {name}
+                              </td>
+                              <td className="py-2 px-3 text-gray-600 border-b whitespace-nowrap">
+                                {phone}
+                              </td>
+                              {allDates.map((date) => {
+                                const fusOnDate = fuMap[date] || [];
+                                return (
+                                  <td
+                                    key={date}
+                                    className="py-1 px-1 border-b align-top"
+                                  >
+                                    {fusOnDate.length > 0 ? (
+                                      <div className="space-y-1">
+                                        {fusOnDate.map((fu, i) => (
+                                          <div
+                                            key={fu.id || i}
+                                            className="relative group"
+                                          >
+                                            <div
+                                              className={`px-1.5 py-0.5 rounded text-xs font-medium text-center ${
+                                                fu.outcome === 'enrolled'
+                                                  ? 'bg-green-100 text-green-700'
+                                                  : fu.outcome === 'interested'
+                                                  ? 'bg-blue-100 text-blue-700'
+                                                  : fu.outcome ===
+                                                    'not_interested'
+                                                  ? 'bg-red-100 text-red-700'
+                                                  : fu.outcome === 'will_think'
+                                                  ? 'bg-yellow-100 text-yellow-700'
+                                                  : 'bg-gray-100 text-gray-700'
+                                              }`}
+                                            >
+                                              {fu.outcome
+                                                ? fu.outcome.replace('_', ' ')
+                                                : 'Called'}
+                                            </div>
+                                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50">
+                                              <div className="bg-gray-900 text-white text-xs rounded-lg px-3 py-2 shadow-lg w-48">
+                                                <p className="font-semibold">
+                                                  {fd(fu.followUpDate)}
+                                                </p>
+                                                <p className="mt-1">
+                                                  <strong>Outcome:</strong>{' '}
+                                                  {fu.outcome
+                                                    ? fu.outcome.replace(
+                                                        '_',
+                                                        ' '
+                                                      )
+                                                    : 'Called'}
+                                                </p>
+                                                {fu.notes && (
+                                                  <p className="text-gray-300 mt-1">
+                                                    <strong>Notes:</strong>{' '}
+                                                    {fu.notes}
+                                                  </p>
+                                                )}
+                                                <p className="text-gray-400 mt-1">
+                                                  <strong>By:</strong>{' '}
+                                                  {fu.counselor?.name || 'N/A'}
+                                                </p>
+                                                <p className="text-gray-500">
+                                                  <strong>Status:</strong>{' '}
+                                                  {fu.status}
+                                                </p>
+                                              </div>
+                                              <div className="w-2 h-2 bg-gray-900 rotate-45 mx-auto -mt-1" />
+                                            </div>
+                                            <button
+                                              onClick={() =>
+                                                handleFollowUpDelete(fu.id)
+                                              }
+                                              disabled={
+                                                followUpDeleting === fu.id
+                                              }
+                                              className="absolute -top-1.5 -right-1.5 hidden group-hover:flex p-0.5 bg-red-500 text-white rounded-full z-20"
+                                            >
+                                              {followUpDeleting === fu.id ? (
+                                                <Icons.Loader2
+                                                  size={8}
+                                                  className="animate-spin"
+                                                />
+                                              ) : (
+                                                <Icons.X size={8} />
+                                              )}
+                                            </button>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-300">-</span>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                              {/* ✅ + button opens follow-up modal */}
+                              <td className="py-2 px-2 text-center border-b">
+                                <button
+                                  onClick={() => openFollowUpModal(id)}
+                                  className="p-1.5 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
+                                  title="Add follow-up for this student"
+                                >
+                                  <Icons.Plus size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Main Table */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
         {loading ? (
-          <LoadingState />
-        ) : preadmissions.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-12 text-center border">
+          <LoadingSkeleton />
+        ) : sortedPreadmissions.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border p-12 text-center">
             <Icons.Users size={48} className="text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
               {hasActiveFilters
-                ? 'No records match your filters'
-                : 'No records found'}
+                ? 'No matching records'
+                : 'No preadmission records'}
+            </h3>
+            <p className="text-gray-500 mb-4">
+              {hasActiveFilters
+                ? 'Try adjusting your filters'
+                : 'Get started by adding your first student'}
             </p>
             {hasActiveFilters ? (
               <button
                 onClick={clearFilters}
-                className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg"
+                className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
               >
                 Clear Filters
               </button>
@@ -1320,7 +1580,7 @@ export default function PreadmissionPage() {
                     setEditingData(null);
                     setShowForm(true);
                   }}
-                  className="mt-4 px-4 py-2 bg-teal-600 text-white rounded-lg"
+                  className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
                 >
                   Add First Student
                 </button>
@@ -1329,446 +1589,383 @@ export default function PreadmissionPage() {
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-            <div className="overflow-x-auto">
+            <div
+              className="overflow-x-auto"
+              style={{ maxHeight: 'calc(100vh - 300px)' }}
+            >
               <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600 w-12">
-                      S.No
+                <thead className="sticky top-0 z-0">
+                  <tr className="bg-gray-50">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
+                      #
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
                       Student
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600">
-                      Phone
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
+                      Contact
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
                       Date
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
                       Depts
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600">
-                      Referral
-                    </th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
                       Status
                     </th>
-                    <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600">
-                      Follow-Ups
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
+                      Follow-ups
                     </th>
-                    <th className="text-center py-3 px-4 text-sm font-semibold text-gray-600">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
+                      Add
+                    </th>
+                    <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {preadmissions.map((p, idx) => {
-                    const referral = REFERRAL_SOURCES.find(
-                      (r) => r.value === p.referralSource
-                    );
+                  {sortedPreadmissions.map((p, idx) => {
                     const status = STATUS_OPTIONS.find(
                       (s) => s.value === p.status
                     );
-                    const RefIcon = referral ? Icons[referral.icon] : null;
+                    const studentFollowUps = mainFollowUpsByStudent[p.id] || [];
+                    const isActive = activeFollowUpRow === p.id;
+                    const hasFollowUp = studentFollowUps.length > 0;
                     return (
-                      <tr
-                        key={p.id}
-                        className="hover:bg-gray-50 transition-colors"
-                      >
-                        <td className="py-3 px-4 text-sm text-gray-500">
-                          {(page - 1) * 20 + idx + 1}
-                        </td>
-                        <td className="py-3 px-4">
-                          <p className="font-medium text-gray-900">
-                            {p.studentName}
-                          </p>
-                          {p.gpa != null && (
-                            <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
-                              GPA: {p.gpa}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-600">
-                          {p.phone}
-                        </td>
-                        <td className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">
-                          <span className="flex items-center gap-1">
-                            <Icons.Calendar
-                              size={12}
-                              className="text-gray-400"
-                            />
+                      <React.Fragment key={p.id}>
+                        <tr
+                          className={`hover:bg-gray-50 transition-colors ${
+                            isActive ? 'bg-blue-50/30' : ''
+                          } ${
+                            hasFollowUp ? 'border-l-4 border-l-purple-400' : ''
+                          }`}
+                        >
+                          <td className="py-3 px-4 text-sm text-gray-500">
+                            {idx + 1}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900">
+                                {p.studentName}
+                              </p>
+                              {hasFollowUp && (
+                                <span className="inline-flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full">
+                                  <Icons.CalendarClock size={10} />{' '}
+                                  {studentFollowUps.length}
+                                </span>
+                              )}
+                            </div>
+                            {p.gpa != null && (
+                              <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                                GPA: {p.gpa}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-sm">
+                            <p className="text-gray-700">{p.phone}</p>
+                            {p.email && (
+                              <p className="text-gray-400 text-xs">{p.email}</p>
+                            )}
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">
                             {fd(p.date)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex flex-wrap gap-1">
-                            {p.departments?.slice(0, 2).map((d) => (
-                              <span
-                                key={d.departmentId}
-                                className="text-xs bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded"
-                              >
-                                {d.department?.name}
-                              </span>
-                            ))}
-                            {p.departments?.length > 2 && (
-                              <span className="text-xs text-gray-400">
-                                +{p.departments.length - 2}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-1">
-                            {RefIcon && (
-                              <RefIcon
-                                size={14}
-                                className={referral?.color.split(' ')[0]}
-                              />
-                            )}
-                            <span className="text-xs text-gray-600">
-                              {referral?.label || 'None'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-wrap gap-1">
+                              {p.departments?.slice(0, 2).map((d) => (
+                                <span
+                                  key={d.departmentId}
+                                  className="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full"
+                                >
+                                  {d.department?.name}
+                                </span>
+                              ))}
+                              {p.departments?.length > 2 && (
+                                <span className="text-xs text-gray-400">
+                                  +{p.departments.length - 2}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-block px-3 py-1 rounded-full text-xs font-medium border ${
+                                status?.color ||
+                                'bg-gray-100 text-gray-800 border-gray-300'
+                              }`}
+                            >
+                              {status?.label || p.status}
                             </span>
-                            {p.agent && (
-                              <Icons.Briefcase
-                                size={12}
-                                className="text-teal-500"
-                                title={`Agent: ${p.agent.name}`}
-                              />
+                          </td>
+                          <td className="py-3 px-4">
+                            {studentFollowUps.length > 0 ? (
+                              <div className="space-y-1">
+                                {studentFollowUps.map((fu) => (
+                                  <div
+                                    key={fu.id}
+                                    className="flex items-center gap-2 text-xs group relative"
+                                  >
+                                    <span className="text-gray-600 whitespace-nowrap">
+                                      {fd(fu.followUpDate)}
+                                    </span>
+                                    {fu.outcome && (
+                                      <span
+                                        className={`px-1.5 py-0.5 rounded-full text-xs ${
+                                          fu.outcome === 'enrolled'
+                                            ? 'bg-green-100 text-green-700'
+                                            : fu.outcome === 'interested'
+                                            ? 'bg-blue-100 text-blue-700'
+                                            : fu.outcome === 'not_interested'
+                                            ? 'bg-red-100 text-red-700'
+                                            : 'bg-yellow-100 text-yellow-700'
+                                        }`}
+                                      >
+                                        {fu.outcome.replace('_', ' ')}
+                                      </span>
+                                    )}
+                                    {fu.notes && (
+                                      <span
+                                        className="text-gray-400 italic truncate max-w-[80px]"
+                                        title={fu.notes}
+                                      >
+                                        {fu.notes}
+                                      </span>
+                                    )}
+                                    {fu.counselor && (
+                                      <span className="text-gray-400 text-xs">
+                                        by {fu.counselor.name}
+                                      </span>
+                                    )}
+                                    <button
+                                      onClick={() =>
+                                        handleFollowUpDelete(fu.id)
+                                      }
+                                      disabled={followUpDeleting === fu.id}
+                                      className="hidden group-hover:block p-0.5 text-red-400 hover:text-red-600 ml-auto"
+                                    >
+                                      {followUpDeleting === fu.id ? (
+                                        <Icons.Loader2
+                                          size={10}
+                                          className="animate-spin"
+                                        />
+                                      ) : (
+                                        <Icons.X size={10} />
+                                      )}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
                             )}
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span
-                            className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${status?.color}`}
-                          >
-                            {status?.label || p.status}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <button
-                            onClick={() => handleFollowUpClick(p)}
-                            className="text-sm text-blue-600 hover:text-blue-800 font-medium flex items-center gap-1.5 hover:bg-blue-50 px-2 py-1 rounded-lg transition-colors"
-                          >
-                            <Icons.CalendarClock size={14} />
-                            View Follow-Ups
-                          </button>
-                        </td>
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-center gap-1">
+                          </td>
+                          <td className="py-3 px-4">
                             <button
-                              onClick={() => setViewStudent(p)}
-                              className="p-1.5 text-teal-600 hover:bg-teal-50 rounded-lg"
-                              title="View"
+                              onClick={() => openFollowUpInline(p.id)}
+                              className={`p-2 rounded-lg transition-colors ${
+                                isActive
+                                  ? 'bg-blue-600 text-white'
+                                  : 'text-blue-600 hover:bg-blue-50'
+                              }`}
                             >
-                              <Icons.Eye size={16} />
+                              <Icons.Plus size={16} />
                             </button>
-                            <button
-                              onClick={() => {
-                                setEditingData(p);
-                                setShowForm(true);
-                              }}
-                              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
-                              title="Edit"
-                            >
-                              <Icons.Edit2 size={16} />
-                            </button>
-                            <button
-                              onClick={() =>
-                                setDeleteModal({ isOpen: true, id: p.id })
-                              }
-                              className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
-                              title="Delete"
-                            >
-                              <Icons.Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-center gap-1">
+                              {hasUpdate && (
+                                <button
+                                  onClick={() => {
+                                    setEditingData(p);
+                                    setShowForm(true);
+                                  }}
+                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                                >
+                                  <Icons.Edit2 size={16} />
+                                </button>
+                              )}
+                              {hasDelete && (
+                                <button
+                                  onClick={() => setDeleteId(p.id)}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
+                                >
+                                  <Icons.Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                        {isActive && (
+                          <tr>
+                            <td colSpan={9} className="bg-blue-50/50 p-3">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <span className="text-sm font-medium text-blue-900">
+                                  Add Follow-up for{' '}
+                                  <strong>{p.studentName}</strong>:
+                                </span>
+                                <input
+                                  type="date"
+                                  value={followUpForm.followUpDate}
+                                  onChange={(e) =>
+                                    setFollowUpForm({
+                                      ...followUpForm,
+                                      followUpDate: e.target.value,
+                                    })
+                                  }
+                                  className="px-3 py-2 border border-blue-300 rounded-lg text-sm w-36"
+                                />
+                                <select
+                                  value={followUpForm.outcome}
+                                  onChange={(e) =>
+                                    setFollowUpForm({
+                                      ...followUpForm,
+                                      outcome: e.target.value,
+                                    })
+                                  }
+                                  className="px-3 py-2 border border-blue-300 rounded-lg text-sm w-36"
+                                >
+                                  <option value="">Outcome</option>
+                                  {OUTCOME_OPTIONS.map((o) => (
+                                    <option key={o} value={o}>
+                                      {o.replace('_', ' ')}
+                                    </option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="text"
+                                  value={followUpForm.notes}
+                                  onChange={(e) =>
+                                    setFollowUpForm({
+                                      ...followUpForm,
+                                      notes: e.target.value,
+                                    })
+                                  }
+                                  placeholder="Remarks / Notes"
+                                  className="px-3 py-2 border border-blue-300 rounded-lg text-sm flex-1 min-w-[200px]"
+                                />
+                                <button
+                                  onClick={() => handleAddFollowUp(p.id)}
+                                  disabled={followUpSaving === p.id}
+                                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm flex items-center gap-1"
+                                >
+                                  {followUpSaving === p.id ? (
+                                    <Icons.Loader2
+                                      size={14}
+                                      className="animate-spin"
+                                    />
+                                  ) : (
+                                    <Icons.Save size={14} />
+                                  )}{' '}
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => setActiveFollowUpRow(null)}
+                                  className="px-3 py-2 text-sm text-gray-500 hover:bg-gray-200 rounded-lg"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-            {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t bg-gray-50">
-                <span className="text-sm text-gray-500">
-                  Showing {(page - 1) * 20 + 1}-
-                  {Math.min(page * 20, pagination.total)} of {pagination.total}
-                </span>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="px-3 py-1 border rounded-lg text-sm disabled:opacity-50"
-                  >
-                    Prev
-                  </button>
-                  <button
-                    onClick={() =>
-                      setPage((p) => Math.min(pagination.totalPages, p + 1))
-                    }
-                    disabled={page === pagination.totalPages}
-                    className="px-3 py-1 border rounded-lg text-sm disabled:opacity-50"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
+            <div className="flex items-center justify-between px-6 py-3 border-t bg-gray-50">
+              <p className="text-sm text-gray-600">
+                Showing{' '}
+                <span className="font-medium">
+                  {sortedPreadmissions.length}
+                </span>{' '}
+                record{sortedPreadmissions.length !== 1 ? 's' : ''}
+              </p>
+            </div>
           </div>
         )}
       </div>
 
-      {/* Modals */}
-      <ViewDetailModal
-        isOpen={!!viewStudent}
-        onClose={() => setViewStudent(null)}
-        preadmission={viewStudent}
-      />
-      <FollowUpListModal
-        isOpen={showFollowUpList}
-        onClose={() => setShowFollowUpList(false)}
-        preadmissionId={followUpListData.id}
-        preadmissionName={followUpListData.name}
-        onFollowUpCreated={() => fetchPreadmissions()}
-      />
-      <ImportResultModal
-        isOpen={showImportResult}
+      {/* Student Form Modal */}
+      <StudentFormModal
+        isOpen={showForm}
         onClose={() => {
-          setShowImportResult(false);
-          setImportResult(null);
+          setShowForm(false);
+          setEditingData(null);
         }}
-        result={importResult}
+        onSubmit={handleSubmit}
+        initialData={editingData}
+        departments={departments}
+        agents={agents}
+        loading={saving}
       />
 
-      {/* Agent List Modal */}
-      {showAgentList && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div
-            className="fixed inset-0 bg-black/50"
-            onClick={() => setShowAgentList(false)}
-          />
-          <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            className="relative bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6 mx-4"
-          >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-bold flex items-center gap-2">
-                <Icons.Briefcase size={20} className="text-teal-600" />
-                Manage Agents
-              </h3>
-              <button
-                onClick={() => setShowAgentList(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg"
-              >
-                <Icons.X size={18} />
-              </button>
-            </div>
-            {agents.map((agent) => (
-              <div
-                key={agent.id}
-                className="flex items-center justify-between p-3 bg-gray-50 rounded-lg mb-2"
-              >
-                <div>
-                  <span className="font-medium">{agent.name}</span>
-                  <span
-                    className={`ml-2 text-xs px-2 py-0.5 rounded-full ${
-                      agent.status === 'active'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}
-                  >
-                    {agent.status}
-                  </span>
-                  <div className="text-xs text-gray-500">
-                    {agent.company} {agent.phone && `• ${agent.phone}`}{' '}
-                    {agent.commission != null && `• ${agent.commission}%`}
-                  </div>
-                </div>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => {
-                      setEditingAgent(agent);
-                      setShowAgentForm(true);
-                    }}
-                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg"
-                  >
-                    <Icons.Edit2 size={14} />
-                  </button>
-                  <button
-                    onClick={() => handleAgentDelete(agent.id)}
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
-                  >
-                    <Icons.Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-            <button
-              onClick={() => {
-                setEditingAgent(null);
-                setShowAgentForm(true);
-              }}
-              className="w-full mt-2 px-4 py-2 bg-teal-600 text-white rounded-lg text-sm flex items-center justify-center gap-2"
-            >
-              <Icons.Plus size={14} />
-              Add Agent
-            </button>
-          </motion.div>
-        </div>
-      )}
+      {/* ✅ Follow-up Form Modal (from panel) */}
+      <FollowUpFormModal
+        isOpen={showFollowUpModal}
+        onClose={() => {
+          setShowFollowUpModal(false);
+          setFollowUpModalData({ preadmissionId: null, studentName: '' });
+        }}
+        onSubmit={handleFollowUpModalSubmit}
+        studentName={followUpModalData.studentName}
+        loading={followUpSaving === followUpModalData.preadmissionId}
+      />
 
-      {/* Agent Form Modal */}
-      {showAgentForm && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center">
-          <div
-            className="fixed inset-0 bg-black/50"
-            onClick={() => {
-              setShowAgentForm(false);
-              setEditingAgent(null);
-            }}
-          />
+      {/* Delete Confirmation */}
+      <AnimatePresence>
+        {deleteId && (
           <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 mx-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50"
+            onClick={() => !isDeleting && setDeleteId(null)}
           >
-            <h3 className="text-lg font-bold mb-4">
-              {editingAgent ? 'Edit' : 'Add'} Agent
-            </h3>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleAgentSubmit({
-                  name: e.target.name.value,
-                  phone: e.target.phone.value,
-                  email: e.target.email.value,
-                  address: e.target.address.value,
-                  company: e.target.company.value,
-                  commission: e.target.commission.value || null,
-                  notes: e.target.notes.value,
-                });
-              }}
-              className="space-y-3"
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
             >
-              <input
-                name="name"
-                defaultValue={editingAgent?.name || ''}
-                placeholder="Name *"
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-                required
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  name="phone"
-                  defaultValue={editingAgent?.phone || ''}
-                  placeholder="Phone"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
-                <input
-                  name="email"
-                  defaultValue={editingAgent?.email || ''}
-                  placeholder="Email"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Icons.AlertTriangle size={32} className="text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">
+                  Delete Record?
+                </h3>
+                <p className="text-gray-600">This action cannot be undone.</p>
               </div>
-              <input
-                name="address"
-                defaultValue={editingAgent?.address || ''}
-                placeholder="Address"
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  name="company"
-                  defaultValue={editingAgent?.company || ''}
-                  placeholder="Company"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
-                <input
-                  name="commission"
-                  type="number"
-                  step="0.1"
-                  defaultValue={editingAgent?.commission || ''}
-                  placeholder="Commission %"
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <textarea
-                name="notes"
-                defaultValue={editingAgent?.notes || ''}
-                placeholder="Notes"
-                rows={2}
-                className="w-full border rounded-lg px-3 py-2 text-sm"
-              />
-              <div className="flex justify-end gap-3 pt-2">
+              <div className="flex gap-3">
                 <button
-                  type="button"
-                  onClick={() => {
-                    setShowAgentForm(false);
-                    setEditingAgent(null);
-                  }}
-                  className="px-4 py-2 border rounded-lg text-sm"
+                  onClick={() => setDeleteId(null)}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2.5 border rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
-                  type="submit"
-                  disabled={agentSaving}
-                  className="px-6 py-2 bg-teal-600 text-white rounded-lg text-sm flex items-center gap-2"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {agentSaving ? (
-                    <Icons.Loader2 size={14} className="animate-spin" />
+                  {isDeleting ? (
+                    <Icons.Loader2 size={18} className="animate-spin" />
                   ) : (
-                    <Icons.Save size={14} />
+                    <Icons.Trash2 size={18} />
                   )}
-                  Save Agent
+                  {isDeleting ? 'Deleting...' : 'Delete'}
                 </button>
               </div>
-            </form>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
-
-      {/* Delete Modal */}
-      {deleteModal.isOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center">
-          <div
-            className="fixed inset-0 bg-black/50"
-            onClick={() => setDeleteModal({ isOpen: false, id: null })}
-          />
-          <motion.div
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            className="bg-white rounded-2xl max-w-md w-full p-6 mx-4"
-          >
-            <h3 className="text-lg font-bold mb-2">Delete Record?</h3>
-            <p className="text-gray-600 mb-4">This cannot be undone.</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteModal({ isOpen: false, id: null })}
-                className="flex-1 px-4 py-2 border rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={isDeleting}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg flex items-center justify-center gap-2"
-              >
-                {isDeleting ? (
-                  <Icons.Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <Icons.Trash2 size={18} />
-                )}
-                Delete
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }
