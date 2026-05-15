@@ -1,8 +1,6 @@
-// app/students/page.jsx - Rewritten to match Users page structure
 'use client';
 
-import { useRef } from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
@@ -19,8 +17,6 @@ export default function StudentsPage() {
   const { can, isLoading: permissionsLoading } = usePermissions();
 
   const [students, setStudents] = useState([]);
-  const [allStudents, setAllStudents] = useState([]);
-  const [showAll, setShowAll] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
@@ -48,7 +44,7 @@ export default function StudentsPage() {
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Sorting states - default to name ascending
+  // Sorting states
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc');
 
@@ -56,7 +52,7 @@ export default function StudentsPage() {
   const successTimeoutRef = useRef(null);
   const errorTimeoutRef = useRef(null);
 
-  // Permission checks using usePermissions hook
+  // Permission checks
   const hasReadPermission = can('students', 'read');
   const hasCreatePermission = can('students', 'create');
   const hasUpdatePermission = can('students', 'update');
@@ -64,37 +60,27 @@ export default function StudentsPage() {
   const hasExportPermission = can('students', 'export') || hasReadPermission;
   const hasImportPermission = can('students', 'import') || hasCreatePermission;
 
-  // Auto-dismiss success message
+  // Auto-dismiss messages
   useEffect(() => {
     if (successMessage) {
-      if (successTimeoutRef.current) {
-        clearTimeout(successTimeoutRef.current);
-      }
-      successTimeoutRef.current = setTimeout(() => {
-        setSuccessMessage(null);
-      }, 3000);
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      successTimeoutRef.current = setTimeout(
+        () => setSuccessMessage(null),
+        3000
+      );
     }
     return () => {
-      if (successTimeoutRef.current) {
-        clearTimeout(successTimeoutRef.current);
-      }
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
     };
   }, [successMessage]);
 
-  // Auto-dismiss error message
   useEffect(() => {
     if (errorMessage) {
-      if (errorTimeoutRef.current) {
-        clearTimeout(errorTimeoutRef.current);
-      }
-      errorTimeoutRef.current = setTimeout(() => {
-        setErrorMessage(null);
-      }, 3000);
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = setTimeout(() => setErrorMessage(null), 3000);
     }
     return () => {
-      if (errorTimeoutRef.current) {
-        clearTimeout(errorTimeoutRef.current);
-      }
+      if (errorTimeoutRef.current) clearTimeout(errorTimeoutRef.current);
     };
   }, [errorMessage]);
 
@@ -111,12 +97,13 @@ export default function StudentsPage() {
     }
   };
 
-  const fetchAllStudents = async () => {
+  // Fetch all students
+  const fetchAllStudents = useCallback(async () => {
     try {
       setLoading(true);
       const params = new URLSearchParams({
         page: 1,
-        limit: 100,
+        limit: 1000,
         ...(search && { search }),
         ...(selectedStatus !== 'all' && { status: selectedStatus }),
         ...(selectedBatch !== 'all' && { batchId: selectedBatch }),
@@ -126,7 +113,6 @@ export default function StudentsPage() {
 
       const response = await fetch(`/api/students?${params}`);
 
-      // Enhanced error handling
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(
@@ -136,19 +122,15 @@ export default function StudentsPage() {
       }
 
       const data = await response.json();
-      const sortedStudents = [...data.students].sort((a, b) =>
-        a.user?.name?.localeCompare(b.user?.name)
-      );
-      setAllStudents(sortedStudents);
-      setStudents(sortedStudents);
-      setShowAll(true);
+      setStudents(data.students || []);
     } catch (err) {
       console.error('Error fetching students:', err);
       setErrorMessage(`Failed to load students: ${err.message}`);
     } finally {
       setLoading(false);
     }
-  };
+  }, [search, selectedStatus, selectedBatch, sortBy, sortOrder]);
+
   // Fetch single student
   const fetchSingleStudent = async (studentId) => {
     try {
@@ -162,86 +144,17 @@ export default function StudentsPage() {
     }
   };
 
-  // Apply filters
-  const applyFilters = useCallback(
-    (studentsList) => {
-      let filtered = [...studentsList];
-
-      if (search) {
-        const searchLower = search.toLowerCase();
-        filtered = filtered.filter(
-          (student) =>
-            student.user?.name?.toLowerCase().includes(searchLower) ||
-            student.user?.email?.toLowerCase().includes(searchLower) ||
-            student.phone?.toLowerCase().includes(searchLower) ||
-            student.rollNumber?.toLowerCase().includes(searchLower)
-        );
-      }
-
-      if (selectedStatus !== 'all') {
-        filtered = filtered.filter(
-          (student) => student.status === selectedStatus
-        );
-      }
-
-      if (selectedBatch !== 'all') {
-        filtered = filtered.filter(
-          (student) => student.batchId === parseInt(selectedBatch)
-        );
-      }
-
-      // Apply sorting
-      filtered.sort((a, b) => {
-        let aVal, bVal;
-        if (sortBy === 'name') {
-          aVal = a.user?.name || '';
-          bVal = b.user?.name || '';
-        } else if (sortBy === 'rollNumber') {
-          aVal = a.rollNumber || '';
-          bVal = b.rollNumber || '';
-        } else if (sortBy === 'status') {
-          aVal = a.status || '';
-          bVal = b.status || '';
-        } else {
-          aVal = a.user?.name || '';
-          bVal = b.user?.name || '';
-        }
-
-        if (sortOrder === 'asc') {
-          return aVal.localeCompare(bVal);
-        } else {
-          return bVal.localeCompare(aVal);
-        }
-      });
-
-      return filtered;
-    },
-    [search, selectedStatus, selectedBatch, sortBy, sortOrder]
-  );
-
+  // Fetch students on mount and when filters change
   useEffect(() => {
-    if (showAll && allStudents.length > 0) {
-      const filtered = applyFilters(allStudents);
-      setStudents(filtered);
-    } else if (!showAll && students.length > 0) {
-      const filtered = applyFilters(students);
-      setStudents(filtered);
+    if (hasReadPermission) {
+      fetchAllStudents();
     }
-  }, [
-    search,
-    selectedStatus,
-    selectedBatch,
-    sortBy,
-    sortOrder,
-    showAll,
-    allStudents,
-    applyFilters,
-  ]);
+  }, [hasReadPermission, fetchAllStudents]);
 
+  // Fetch batches on mount
   useEffect(() => {
     if (hasReadPermission) {
       fetchBatches();
-      fetchAllStudents();
     }
   }, [hasReadPermission]);
 
@@ -355,12 +268,9 @@ export default function StudentsPage() {
             formData.append('name', student.name);
             formData.append('email', student.email);
             formData.append('phone', student.phone);
-            formData.append('address', student.address);
-            formData.append('rollNumber', student.rollNumber || '');
-            formData.append(
-              'registrationNumber',
-              student.registrationNumber || ''
-            );
+            formData.append('address', student.address || '');
+            formData.append('rollNo', student.rollNumber || '');
+            formData.append('enrollmentNo', student.registrationNumber || '');
             formData.append('examRollNumber', student.examRollNumber || '');
             formData.append(
               'enrollmentDate',
@@ -381,21 +291,12 @@ export default function StudentsPage() {
             });
 
             if (response.ok) {
-              const data = await response.json();
               successCount++;
-              const singleStudent = await fetchSingleStudent(data.student.id);
-              if (singleStudent) {
-                setStudents([singleStudent]);
-                setShowAll(false);
-              }
             } else {
               const errorData = await response.json();
               setImportErrors((prev) => [
                 ...prev,
-                {
-                  row: `Import`,
-                  error: `${student.name}: ${errorData.error}`,
-                },
+                { row: 'Import', error: `${student.name}: ${errorData.error}` },
               ]);
               failCount++;
             }
@@ -403,10 +304,7 @@ export default function StudentsPage() {
             failCount++;
             setImportErrors((prev) => [
               ...prev,
-              {
-                row: `Import`,
-                error: `${student.name}: ${err.message}`,
-              },
+              { row: 'Import', error: `${student.name}: ${err.message}` },
             ]);
           }
         }
@@ -421,8 +319,8 @@ export default function StudentsPage() {
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
-          // Refresh to get all students
-          setTimeout(() => fetchAllStudents(), 1000);
+          // Refresh the list
+          fetchAllStudents();
         }
       }
     } catch (err) {
@@ -453,16 +351,9 @@ export default function StudentsPage() {
         throw new Error(errorData.error || 'Failed to create student');
       }
 
-      const newStudent = await response.json();
-
-      const singleStudent = await fetchSingleStudent(newStudent.student.id);
-      if (singleStudent) {
-        setStudents([singleStudent]);
-        setShowAll(false);
-      }
-
       setSuccessMessage('Student created successfully!');
       setIsFormModalOpen(false);
+      fetchAllStudents(); // Refresh the list
     } catch (err) {
       setErrorMessage(err.message);
       console.error('Error creating student:', err);
@@ -496,21 +387,6 @@ export default function StudentsPage() {
         throw new Error(errorData.error || 'Failed to update student');
       }
 
-      const updatedStudent = await response.json();
-
-      const singleStudent = await fetchSingleStudent(editingStudent.id);
-      if (singleStudent) {
-        setStudents([singleStudent]);
-        setShowAll(false);
-      }
-
-      if (allStudents.length > 0) {
-        const updatedAllStudents = allStudents.map((s) =>
-          s.id === editingStudent.id ? singleStudent : s
-        );
-        setAllStudents(updatedAllStudents);
-      }
-
       setSuccessMessage('Student updated successfully!');
       setIsFormModalOpen(false);
       setEditingStudent(null);
@@ -519,6 +395,8 @@ export default function StudentsPage() {
         setIsModalOpen(false);
         setSelectedStudent(null);
       }
+
+      fetchAllStudents(); // Refresh the list
     } catch (err) {
       setErrorMessage(err.message);
       console.error('Error updating student:', err);
@@ -546,23 +424,6 @@ export default function StudentsPage() {
         throw new Error(errorData.error || 'Failed to delete student');
       }
 
-      if (allStudents.length > 0) {
-        const updatedAllStudents = allStudents.filter(
-          (s) => s.id !== studentId
-        );
-        setAllStudents(updatedAllStudents);
-
-        if (showAll) {
-          setStudents(updatedAllStudents);
-        } else {
-          setStudents([]);
-          setShowAll(false);
-        }
-      } else {
-        setStudents([]);
-        setShowAll(false);
-      }
-
       setSuccessMessage('Student deleted successfully!');
       setShowDeleteConfirm(false);
       setStudentToDelete(null);
@@ -572,6 +433,8 @@ export default function StudentsPage() {
         setIsModalOpen(false);
         setSelectedStudent(null);
       }
+
+      fetchAllStudents(); // Refresh the list
     } catch (err) {
       setErrorMessage(err.message);
       console.error('Error deleting student:', err);
@@ -609,20 +472,10 @@ export default function StudentsPage() {
 
       const data = await response.json();
 
-      if (allStudents.length > 0) {
-        const updatedAllStudents = allStudents.filter(
-          (s) => !selectedStudents.includes(s.id)
-        );
-        setAllStudents(updatedAllStudents);
-
-        if (showAll) {
-          setStudents(updatedAllStudents);
-        }
-      }
-
       setSelectedStudents([]);
       setSuccessMessage(`Successfully deleted ${data.deletedCount} student(s)`);
       setShowBulkDeleteConfirm(false);
+      fetchAllStudents(); // Refresh the list
     } catch (err) {
       setErrorMessage(err.message);
       console.error('Error bulk deleting students:', err);
@@ -874,7 +727,7 @@ export default function StudentsPage() {
   );
 
   // Loading state
-  if (permissionsLoading || (loading && students.length === 0 && showAll)) {
+  if (permissionsLoading || loading) {
     return (
       <div className="p-6">
         <div className="animate-pulse space-y-4">
@@ -962,7 +815,7 @@ export default function StudentsPage() {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="mb-6 flex justify-between items-center">
+      <div className="mb-6 flex justify-between items-center flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
             Student Management
@@ -970,17 +823,19 @@ export default function StudentsPage() {
           <p className="text-gray-500 mt-1">
             Manage and organize student records
           </p>
-          {!showAll && students.length === 1 && (
+          {students.length > 0 && (
             <p className="text-sm text-indigo-600 mt-1">
-              Showing newly{' '}
-              {students[0]?.createdAt && !students[0]?.updatedAt
-                ? 'created'
-                : 'updated'}{' '}
-              student. Click Refresh to see all students.
+              Showing {students.length} student(s)
+              {selectedBatch !== 'all' &&
+              batches.find((b) => b.id === parseInt(selectedBatch))
+                ? ` in ${
+                    batches.find((b) => b.id === parseInt(selectedBatch)).name
+                  }`
+                : ''}
             </p>
           )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 flex-wrap">
           <button
             onClick={fetchAllStudents}
             className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center gap-2"
@@ -1116,11 +971,11 @@ export default function StudentsPage() {
                 </th>
                 <th
                   className="text-left py-3 px-4 text-sm font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 transition-colors"
-                  onClick={() => handleSort('rollNumber')}
+                  onClick={() => handleSort('rollNo')}
                 >
                   <div className="flex items-center gap-2">
                     Roll Number
-                    {getSortIcon('rollNumber')}
+                    {getSortIcon('rollNo')}
                   </div>
                 </th>
                 <th className="text-left py-3 px-4 text-sm font-semibold text-gray-600">
@@ -1456,8 +1311,7 @@ export default function StudentsPage() {
               <p className="text-gray-600 text-center mb-4">
                 Are you sure you want to delete{' '}
                 <strong>{studentToDelete.user?.name}</strong>? This action
-                cannot be undone. This will also delete the associated user
-                account.
+                cannot be undone.
               </p>
               <div className="flex gap-3">
                 <button

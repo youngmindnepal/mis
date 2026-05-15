@@ -10,12 +10,12 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const page = parseInt(searchParams.get('page')) || 1;
-    const limit = parseInt(searchParams.get('limit')) || 10;
+    const limit = parseInt(searchParams.get('limit')) || 100;
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const batchId = searchParams.get('batchId') || '';
-    const sortBy = searchParams.get('sortBy') || 'createdAt';
-    const sortOrder = searchParams.get('sortOrder') || 'desc';
+    const sortBy = searchParams.get('sortBy') || 'name';
+    const sortOrder = searchParams.get('sortOrder') || 'asc';
 
     const skip = (page - 1) * limit;
 
@@ -62,7 +62,40 @@ export async function GET(request) {
 
     // Transform students for frontend compatibility
     const transformedStudents = students.map((student) => ({
-      ...student,
+      id: student.id,
+      name: student.name,
+      email: student.email,
+      phone: student.phone || '',
+      address: student.address,
+      rollNo: student.rollNo,
+      enrollmentNo: student.enrollmentNo,
+      examRollNumber: student.examRollNumber,
+      enrollmentDate: student.enrollmentDate,
+      dateOfBirth: student.dateOfBirth,
+      bloodGroup: student.bloodGroup,
+      guardianName: student.guardianName,
+      guardianContact: student.guardianContact,
+      guardianEmail: student.guardianEmail,
+      emergencyContact: student.emergencyContact,
+      profilePicture: student.profilePicture,
+      status: student.status,
+      createdAt: student.createdAt,
+      updatedAt: student.updatedAt,
+      batchId: student.batchId,
+      batch: student.batch
+        ? {
+            id: student.batch.id,
+            name: student.batch.name,
+            academicYear: student.batch.academicYear,
+            department: student.batch.department
+              ? {
+                  id: student.batch.department.id,
+                  name: student.batch.department.name,
+                }
+              : null,
+          }
+        : null,
+      // Frontend expects these fields
       user: {
         name: student.name,
         email: student.email,
@@ -158,8 +191,8 @@ export async function POST(request) {
     }
 
     // Validate phone format (10 digits)
-    const phoneRegex = /^\d{10}$/;
-    if (!phoneRegex.test(phone.replace(/\D/g, ''))) {
+    const phoneDigits = phone.replace(/\D/g, '');
+    if (phoneDigits.length !== 10) {
       return NextResponse.json(
         { error: 'Phone number must be 10 digits' },
         { status: 400 }
@@ -278,7 +311,7 @@ export async function POST(request) {
     const studentData = {
       name,
       email,
-      phone,
+      phone: phoneDigits,
       address,
       rollNo,
       enrollmentNo,
@@ -318,7 +351,39 @@ export async function POST(request) {
 
     // Transform student for frontend compatibility
     const transformedStudent = {
-      ...student,
+      id: student.id,
+      name: student.name,
+      email: student.email,
+      phone: student.phone || '',
+      address: student.address,
+      rollNo: student.rollNo,
+      enrollmentNo: student.enrollmentNo,
+      examRollNumber: student.examRollNumber,
+      enrollmentDate: student.enrollmentDate,
+      dateOfBirth: student.dateOfBirth,
+      bloodGroup: student.bloodGroup,
+      guardianName: student.guardianName,
+      guardianContact: student.guardianContact,
+      guardianEmail: student.guardianEmail,
+      emergencyContact: student.emergencyContact,
+      profilePicture: student.profilePicture,
+      status: student.status,
+      createdAt: student.createdAt,
+      updatedAt: student.updatedAt,
+      batchId: student.batchId,
+      batch: student.batch
+        ? {
+            id: student.batch.id,
+            name: student.batch.name,
+            academicYear: student.batch.academicYear,
+            department: student.batch.department
+              ? {
+                  id: student.batch.department.id,
+                  name: student.batch.department.name,
+                }
+              : null,
+          }
+        : null,
       user: {
         name: student.name,
         email: student.email,
