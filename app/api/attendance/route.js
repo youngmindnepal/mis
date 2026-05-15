@@ -1,41 +1,37 @@
+// app/api/attendance/route.js
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
 export async function GET(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
     const { searchParams } = new URL(request.url);
     const date =
       searchParams.get('date') || new Date().toISOString().split('T')[0];
-    const employeeId = searchParams.get('employeeId');
 
-    const where = {
-      date: {
-        gte: new Date(date + 'T00:00:00'),
-        lte: new Date(date + 'T23:59:59.999'),
-      },
-    };
-    if (employeeId) where.employeeId = parseInt(employeeId);
+    const start = new Date(date + 'T00:00:00');
+    const end = new Date(date + 'T23:59:59');
 
     const attendances = await prisma.employeeAttendance.findMany({
-      where,
+      where: { date: { gte: start, lte: end } },
       include: {
         employee: {
-          select: { id: true, name: true, employeeId: true, department: true },
+          select: {
+            id: true,
+            name: true,
+            employeeId: true,
+            department: true,
+            userId: true,
+          },
         },
       },
       orderBy: { checkIn: 'desc' },
     });
 
-    return NextResponse.json({ success: true, attendances, date });
+    return NextResponse.json({ attendances });
   } catch (error) {
+    console.error('GET /api/attendance error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch', details: error.message },
+      { error: 'Failed to fetch attendance' },
       { status: 500 }
     );
   }
@@ -43,78 +39,102 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
     const body = await request.json();
-    const { employeeId, confidence } = body;
-    if (!employeeId)
+    const { employeeId, confidence, action } = body;
+    // action can be 'checkin' or 'checkout'
+
+    if (!employeeId) {
       return NextResponse.json(
-        { error: 'Employee ID required' },
+        { error: 'Employee ID is required' },
         { status: 400 }
       );
+    }
 
-    const now = new Date();
-    const todayStart = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate()
-    );
-    const todayEnd = new Date(todayStart.getTime() + 86400000);
-
-    const existing = await prisma.employeeAttendance.findFirst({
-      where: {
-        employeeId: parseInt(employeeId),
-        date: { gte: todayStart, lt: todayEnd },
-      },
+    // Find employee
+    let employee = await prisma.employee.findFirst({
+      where: { userId: parseInt(employeeId) },
     });
 
-    if (existing) {
-      if (existing.checkIn && !existing.checkOut) {
-        const att = await prisma.employeeAttendance.update({
-          where: { id: existing.id },
-          data: { checkOut: now },
-          include: { employee: { select: { name: true } } },
-        });
-        return NextResponse.json({
-          success: true,
-          type: 'checkout',
-          message: `${att.employee.name} checked out!`,
-          attendance: att,
-        });
-      }
-      return NextResponse.json({
-        success: false,
-        message: 'Already checked in/out today',
+    if (!employee) {
+      employee = await prisma.employee.findUnique({
+        where: { id: parseInt(employeeId) },
       });
     }
 
+    if (!employee) {
+      return NextResponse.json(
+        { error: 'Employee not found' },
+        { status: 404 }
+      );
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const tomorrow = new Date(today.getTime() + 86400000);
+
+    if (action === 'checkout') {
+      // Find the latest attendance record without checkout
+      const existing = await prisma.employeeAttendance.findFirst({
+        where: {
+          employeeId: employee.id,
+          date: { gte: today, lt: tomorrow },
+          checkOut: null,
+        },
+        orderBy: { checkIn: 'desc' },
+      });
+
+      if (existing) {
+        const updated = await prisma.employeeAttendance.update({
+          where: { id: existing.id },
+          data: {
+            checkOut: now,
+            confidence: confidence || existing.confidence,
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          message: `${employee.name} checked out`,
+          action: 'checkout',
+          attendance: updated,
+        });
+      }
+
+      return NextResponse.json({
+        success: false,
+        message: `${employee.name} has no active check-in to check out from`,
+        action: 'no_checkin',
+      });
+    }
+
+    // Default: checkin action
+    // Always create a new check-in record
     const isLate = now.getHours() >= 9;
-    const att = await prisma.employeeAttendance.create({
+    const attendance = await prisma.employeeAttendance.create({
       data: {
-        employeeId: parseInt(employeeId),
+        employeeId: employee.id,
         date: now,
         checkIn: now,
+        checkOut: null,
         status: isLate ? 'late' : 'present',
         method: 'face',
         confidence: confidence || null,
       },
-      include: { employee: { select: { name: true } } },
     });
 
     return NextResponse.json(
       {
         success: true,
-        type: 'checkin',
-        message: `Welcome ${att.employee.name}!`,
-        attendance: att,
+        message: `${employee.name} checked in${isLate ? ' (Late)' : ''}`,
+        action: 'checkin',
+        attendance,
       },
       { status: 201 }
     );
   } catch (error) {
+    console.error('POST /api/attendance error:', error);
     return NextResponse.json(
-      { error: 'Failed', details: error.message },
+      { error: 'Failed to mark attendance' },
       { status: 500 }
     );
   }

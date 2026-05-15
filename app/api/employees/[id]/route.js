@@ -1,76 +1,196 @@
+// app/api/employees/[id]/route.js
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-export async function PUT(request, context) {
+// Helper function to extract ID from URL
+function extractIdFromUrl(url) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const segments = url.split('/');
+    // Filter out empty segments and find the last numeric segment
+    const numericSegments = segments.filter((s) => s && /^\d+$/.test(s));
+    return parseInt(numericSegments[numericSegments.length - 1]);
+  } catch {
+    return NaN;
+  }
+}
 
-    // Get ID from URL - compatible with Next.js 14+
-    const id = context.params?.id || request.url.split('/').pop();
+export async function GET(request, { params }) {
+  try {
+    // Try to get ID from params first (Next.js 14)
+    let employeeId;
 
-    const body = await request.json();
-    console.log('Updating employee', id, 'with:', body);
+    try {
+      if (params && params.id) {
+        employeeId = parseInt(params.id);
+      }
+    } catch {
+      // params might be async in Next.js 15
+    }
 
-    const updateData = {};
+    if (!employeeId || isNaN(employeeId)) {
+      // Extract from URL as fallback
+      employeeId = extractIdFromUrl(request.url);
+    }
 
-    if (body.name !== undefined) updateData.name = body.name.trim();
-    if (body.email !== undefined) updateData.email = body.email?.trim() || null;
-    if (body.phone !== undefined) updateData.phone = body.phone?.trim() || null;
-    if (body.department !== undefined)
-      updateData.department = body.department?.trim() || null;
-    if (body.designation !== undefined)
-      updateData.designation = body.designation?.trim() || null;
-    if (body.status !== undefined) updateData.status = body.status;
-    if (body.faceDescriptor !== undefined)
-      updateData.faceDescriptor = body.faceDescriptor;
-    if (body.faceImage !== undefined) updateData.faceImage = body.faceImage;
+    if (isNaN(employeeId)) {
+      return NextResponse.json(
+        { error: 'Invalid employee ID' },
+        { status: 400 }
+      );
+    }
 
-    // Ensure employee exists
-    const existing = await prisma.employee.findUnique({
-      where: { id: parseInt(id) },
+    const employee = await prisma.employee.findUnique({
+      where: { id: employeeId },
     });
 
-    if (!existing) {
+    if (!employee) {
       return NextResponse.json(
         { error: 'Employee not found' },
         { status: 404 }
       );
     }
 
-    const employee = await prisma.employee.update({
-      where: { id: parseInt(id) },
-      data: updateData,
-    });
-
-    console.log('Employee updated:', employee.id);
-    return NextResponse.json({ success: true, message: 'Updated', employee });
+    return NextResponse.json({ employee });
   } catch (error) {
-    console.error('Error updating employee:', error);
+    console.error('GET error:', error);
     return NextResponse.json(
-      { error: 'Failed to update', details: error.message },
+      { error: 'Failed to fetch employee', details: error.message },
       { status: 500 }
     );
   }
 }
 
-export async function DELETE(request, context) {
+export async function PUT(request, { params }) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Try multiple ways to get the ID
+    let employeeId;
 
-    const id = context.params?.id || request.url.split('/').pop();
+    // Try from params
+    try {
+      if (params && params.id) {
+        employeeId = parseInt(params.id);
+      }
+    } catch {
+      // params might be async
+    }
 
-    await prisma.employee.delete({ where: { id: parseInt(id) } });
-    return NextResponse.json({ success: true, message: 'Deleted' });
+    // Try from URL if params didn't work
+    if (!employeeId || isNaN(employeeId)) {
+      employeeId = extractIdFromUrl(request.url);
+    }
+
+    console.log('PUT request - Employee ID:', employeeId);
+
+    if (isNaN(employeeId)) {
+      return NextResponse.json(
+        { error: 'Invalid employee ID' },
+        { status: 400 }
+      );
+    }
+
+    // Check if employee exists
+    const existing = await prisma.employee.findUnique({
+      where: { id: employeeId },
+    });
+
+    if (!existing) {
+      console.log('Employee not found:', employeeId);
+      return NextResponse.json(
+        { error: 'Employee not found' },
+        { status: 404 }
+      );
+    }
+
+    const data = await request.json();
+    console.log('Update data received:', Object.keys(data));
+
+    // Build update data object
+    const updateData = {};
+
+    if (data.faceDescriptor !== undefined && data.faceDescriptor !== null) {
+      updateData.faceDescriptor = data.faceDescriptor;
+    }
+
+    if (data.faceImage !== undefined && data.faceImage !== null) {
+      updateData.faceImage = data.faceImage;
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { error: 'No valid data to update' },
+        { status: 400 }
+      );
+    }
+
+    // Update employee
+    const employee = await prisma.employee.update({
+      where: { id: employeeId },
+      data: updateData,
+    });
+
+    console.log('Employee updated successfully:', employee.id);
+
+    return NextResponse.json({
+      success: true,
+      message: 'Face data updated successfully',
+      employee: {
+        id: employee.id,
+        name: employee.name,
+        employeeId: employee.employeeId,
+      },
+    });
   } catch (error) {
-    console.error('Error deleting:', error);
+    console.error('PUT error:', error);
+
+    if (error.code === 'P2025') {
+      return NextResponse.json(
+        { error: 'Employee not found' },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json(
-      { error: 'Failed to delete', details: error.message },
+      { error: 'Failed to update employee', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request, { params }) {
+  try {
+    let employeeId;
+
+    try {
+      if (params && params.id) {
+        employeeId = parseInt(params.id);
+      }
+    } catch {}
+
+    if (!employeeId || isNaN(employeeId)) {
+      employeeId = extractIdFromUrl(request.url);
+    }
+
+    if (isNaN(employeeId)) {
+      return NextResponse.json(
+        { error: 'Invalid employee ID' },
+        { status: 400 }
+      );
+    }
+
+    // Soft delete - set status to inactive
+    await prisma.employee.update({
+      where: { id: employeeId },
+      data: { status: 'inactive' },
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: 'Employee deactivated',
+    });
+  } catch (error) {
+    console.error('DELETE error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete employee', details: error.message },
       { status: 500 }
     );
   }

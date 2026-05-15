@@ -1,44 +1,49 @@
+// app/api/attendance/[id]/route.js
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-export async function DELETE(request, context) {
+export async function DELETE(request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Extract ID directly from the URL - most reliable method
+    const url = new URL(request.url);
+    const pathSegments = url.pathname.split('/');
+    const id = parseInt(pathSegments[pathSegments.length - 1]);
+
+    console.log('DELETE attendance - URL:', request.url, 'ID:', id);
+
+    if (!id || isNaN(id)) {
+      return NextResponse.json(
+        { error: 'Invalid attendance ID' },
+        { status: 400 }
+      );
     }
-
-    // Get ID from URL
-    const url = request.url;
-    const id = url.split('/').pop();
-
-    if (!id || isNaN(parseInt(id))) {
-      return NextResponse.json({ error: 'Invalid ID' }, { status: 400 });
-    }
-
-    console.log('Deleting attendance ID:', id);
 
     // Check if record exists
     const existing = await prisma.employeeAttendance.findUnique({
-      where: { id: parseInt(id) },
+      where: { id: id },
     });
 
     if (!existing) {
-      return NextResponse.json({ error: 'Record not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Attendance record not found' },
+        { status: 404 }
+      );
     }
 
+    // Delete the record
     await prisma.employeeAttendance.delete({
-      where: { id: parseInt(id) },
+      where: { id: id },
     });
 
-    console.log('Attendance deleted:', id);
-    return NextResponse.json({ success: true, message: 'Attendance deleted' });
+    console.log('Attendance deleted successfully:', id);
+    return NextResponse.json({
+      success: true,
+      message: 'Attendance deleted successfully',
+    });
   } catch (error) {
-    console.error('Error deleting attendance:', error);
+    console.error('DELETE error:', error);
     return NextResponse.json(
-      { error: 'Failed to delete', details: error.message },
+      { error: 'Failed to delete attendance', details: error.message },
       { status: 500 }
     );
   }

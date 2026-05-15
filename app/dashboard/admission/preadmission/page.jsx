@@ -11,6 +11,7 @@ import React, {
 import { motion, AnimatePresence } from 'framer-motion';
 import * as Icons from 'lucide-react';
 import { usePermissions } from '@/hooks/usePermissions';
+import * as XLSX from 'xlsx';
 
 const REFERRAL_SOURCES = [
   {
@@ -105,6 +106,22 @@ const OUTCOME_OPTIONS = [
   'no_answer',
 ];
 
+// Excel template headers
+const EXCEL_HEADERS = [
+  'Student Name *',
+  'Phone *',
+  'Email',
+  'Address',
+  'Date (YYYY-MM-DD)',
+  'Previous College',
+  'GPA',
+  'Referral Source',
+  'Referral Name',
+  'Agent Name',
+  'Department Names (comma-separated)',
+  'Notes',
+];
+
 const getTodayStr = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(
@@ -129,6 +146,747 @@ function LoadingSkeleton() {
   );
 }
 
+// ==================== EXCEL IMPORT MODAL ====================
+function ExcelImportModal({ isOpen, onClose, onImport, departments, agents }) {
+  const [file, setFile] = useState(null);
+  const [previewData, setPreviewData] = useState([]);
+  const [errors, setErrors] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = (e) => {
+    const selectedFile = e.target.files[0];
+    if (!selectedFile) return;
+
+    setFile(selectedFile);
+    setErrors([]);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: 'binary' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        if (jsonData.length < 2) {
+          setErrors(['Excel file is empty or has no data rows']);
+          setPreviewData([]);
+          return;
+        }
+
+        // Skip header row and process data
+        const dataRows = jsonData
+          .slice(1)
+          .filter((row) =>
+            row.some(
+              (cell) => cell !== undefined && cell !== null && cell !== ''
+            )
+          );
+
+        const parsedData = dataRows.map((row, index) => ({
+          rowNumber: index + 2, // Excel row number (1-indexed + header)
+          studentName: row[0]?.toString().trim() || '',
+          phone: row[1]?.toString().trim() || '',
+          email: row[2]?.toString().trim() || '',
+          address: row[3]?.toString().trim() || '',
+          date: row[4]?.toString().trim() || getTodayStr(),
+          previousCollege: row[5]?.toString().trim() || '',
+          gpa: row[6] ? parseFloat(row[6]) : null,
+          referralSource: row[7]?.toString().trim().toLowerCase() || '',
+          referralName: row[8]?.toString().trim() || '',
+          agentName: row[9]?.toString().trim() || '',
+          departmentNames: row[10]?.toString().trim() || '',
+          notes: row[11]?.toString().trim() || '',
+        }));
+
+        // Validate data
+        const newErrors = [];
+        parsedData.forEach((item) => {
+          const rowErrors = [];
+          if (!item.studentName)
+            rowErrors.push(`Row ${item.rowNumber}: Student Name is required`);
+          if (!item.phone)
+            rowErrors.push(`Row ${item.rowNumber}: Phone is required`);
+
+          // Validate date format
+          if (item.date && !/^\d{4}-\d{2}-\d{2}$/.test(item.date)) {
+            rowErrors.push(
+              `Row ${item.rowNumber}: Invalid date format. Use YYYY-MM-DD`
+            );
+          }
+
+          // Validate referral source
+          if (
+            item.referralSource &&
+            !REFERRAL_SOURCES.find((s) => s.value === item.referralSource)
+          ) {
+            rowErrors.push(
+              `Row ${item.rowNumber}: Invalid referral source "${item.referralSource}"`
+            );
+          }
+
+          // Validate GPA
+          if (
+            item.gpa !== null &&
+            (isNaN(item.gpa) || item.gpa < 0 || item.gpa > 4)
+          ) {
+            rowErrors.push(
+              `Row ${item.rowNumber}: GPA must be between 0 and 4`
+            );
+          }
+
+          newErrors.push(...rowErrors);
+        });
+
+        setErrors(newErrors);
+        setPreviewData(parsedData);
+      } catch (error) {
+        setErrors(['Failed to parse Excel file: ' + error.message]);
+        setPreviewData([]);
+      }
+    };
+    reader.readAsBinaryString(selectedFile);
+  };
+
+  const handleImport = async () => {
+    setImporting(true);
+    try {
+      await onImport(previewData);
+      onClose();
+    } catch (error) {
+      setErrors([error.message]);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="relative bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+      >
+        <div className="p-6 border-b">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Icons.FileSpreadsheet size={24} className="text-green-600" />
+              Import Students from Excel
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <Icons.X size={20} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-green-500 transition-colors">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <Icons.Upload size={48} className="text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {file ? file.name : 'Select Excel File'}
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Supported formats: .xlsx, .xls, .csv
+            </p>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm font-medium"
+            >
+              Browse Files
+            </button>
+          </div>
+
+          {errors.length > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <h4 className="font-medium text-red-800 mb-2 flex items-center gap-2">
+                <Icons.AlertTriangle size={16} />
+                Validation Errors ({errors.length})
+              </h4>
+              <ul className="list-disc list-inside text-sm text-red-700 space-y-1">
+                {errors.map((error, idx) => (
+                  <li key={idx}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {previewData.length > 0 && (
+            <div>
+              <h4 className="font-medium text-gray-900 mb-2">
+                Preview ({previewData.length} records)
+              </h4>
+              <div className="overflow-x-auto max-h-64 border rounded-lg">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 sticky top-0">
+                    <tr>
+                      <th className="text-left py-2 px-3 font-semibold">#</th>
+                      <th className="text-left py-2 px-3 font-semibold">
+                        Name
+                      </th>
+                      <th className="text-left py-2 px-3 font-semibold">
+                        Phone
+                      </th>
+                      <th className="text-left py-2 px-3 font-semibold">
+                        Email
+                      </th>
+                      <th className="text-left py-2 px-3 font-semibold">
+                        Department
+                      </th>
+                      <th className="text-left py-2 px-3 font-semibold">
+                        Agent
+                      </th>
+                      <th className="text-left py-2 px-3 font-semibold">
+                        Source
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {previewData.slice(0, 50).map((item, idx) => (
+                      <tr key={idx} className="hover:bg-gray-50">
+                        <td className="py-2 px-3 text-gray-500">
+                          {item.rowNumber}
+                        </td>
+                        <td className="py-2 px-3 font-medium">
+                          {item.studentName}
+                        </td>
+                        <td className="py-2 px-3">{item.phone}</td>
+                        <td className="py-2 px-3 text-gray-600">
+                          {item.email || '-'}
+                        </td>
+                        <td className="py-2 px-3 text-gray-600">
+                          {item.departmentNames || '-'}
+                        </td>
+                        <td className="py-2 px-3 text-gray-600">
+                          {item.agentName || '-'}
+                        </td>
+                        <td className="py-2 px-3 text-gray-600">
+                          {item.referralSource || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {previewData.length > 50 && (
+                  <p className="text-center text-xs text-gray-500 py-2">
+                    Showing 50 of {previewData.length} records
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="border-t p-4 flex justify-between items-center">
+          <p className="text-sm text-gray-600">
+            {previewData.length} valid records found
+          </p>
+          <div className="flex gap-3">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={
+                previewData.length === 0 || errors.length > 0 || importing
+              }
+              className="px-6 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {importing ? (
+                <Icons.Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Icons.Upload size={14} />
+              )}
+              {importing
+                ? 'Importing...'
+                : `Import ${previewData.length} Students`}
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ==================== AGENT FORM MODAL ====================
+function AgentFormModal({ isOpen, onClose, onSubmit, initialData, loading }) {
+  const [form, setForm] = useState({
+    name: '',
+    company: '',
+    phone: '',
+    email: '',
+    address: '',
+    commission: '',
+    status: 'active',
+    notes: '',
+  });
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    if (isOpen) {
+      if (initialData) {
+        setForm({
+          name: initialData.name || '',
+          company: initialData.company || '',
+          phone: initialData.phone || '',
+          email: initialData.email || '',
+          address: initialData.address || '',
+          commission:
+            initialData.commission != null
+              ? String(initialData.commission)
+              : '',
+          status: initialData.status || 'active',
+          notes: initialData.notes || '',
+        });
+      } else {
+        setForm({
+          name: '',
+          company: '',
+          phone: '',
+          email: '',
+          address: '',
+          commission: '',
+          status: 'active',
+          notes: '',
+        });
+      }
+      setErrors({});
+    }
+  }, [isOpen, initialData]);
+
+  const validate = () => {
+    const errs = {};
+    if (!form.name.trim()) errs.name = 'Required';
+    if (!form.phone.trim()) errs.phone = 'Required';
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!validate()) return;
+    onSubmit({
+      ...form,
+      commission: form.commission ? parseFloat(form.commission) : null,
+    });
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="relative bg-white rounded-2xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6"
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold flex items-center gap-2">
+            <Icons.Briefcase size={20} className="text-teal-600" />
+            {initialData ? 'Edit Agent' : 'Add New Agent'}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-lg"
+          >
+            <Icons.X size={18} />
+          </button>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold mb-1">
+              Agent Name *
+            </label>
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Full name"
+              className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                errors.name ? 'border-red-500' : 'border-gray-300'
+              } focus:ring-2 focus:ring-teal-500 focus:outline-none`}
+            />
+            {errors.name && (
+              <p className="text-xs text-red-500 mt-1">{errors.name}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold mb-1">Company</label>
+            <input
+              type="text"
+              value={form.company}
+              onChange={(e) => setForm({ ...form, company: e.target.value })}
+              placeholder="Company name"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                Phone *
+              </label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="9841xxxxxx"
+                className={`w-full rounded-lg border px-3 py-2 text-sm ${
+                  errors.phone ? 'border-red-500' : 'border-gray-300'
+                } focus:ring-2 focus:ring-teal-500 focus:outline-none`}
+              />
+              {errors.phone && (
+                <p className="text-xs text-red-500 mt-1">{errors.phone}</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">Email</label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="email@example.com"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold mb-1">Address</label>
+            <input
+              type="text"
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="Address"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold mb-1">
+                Commission (%)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={form.commission}
+                onChange={(e) =>
+                  setForm({ ...form, commission: e.target.value })
+                }
+                placeholder="10.5"
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1">Status</label>
+              <select
+                value={form.status}
+                onChange={(e) => setForm({ ...form, status: e.target.value })}
+                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold mb-1">Notes</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+              placeholder="Any additional notes..."
+              rows={3}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-teal-500 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-2 text-sm bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? (
+                <Icons.Loader2 size={14} className="animate-spin" />
+              ) : (
+                <Icons.Save size={14} />
+              )}
+              {initialData ? 'Update' : 'Save Agent'}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </div>
+  );
+}
+
+// ==================== AGENT LIST MODAL ====================
+function AgentListModal({
+  isOpen,
+  onClose,
+  agents,
+  onEdit,
+  onDelete,
+  deletingId,
+  onRefresh,
+}) {
+  const [search, setSearch] = useState('');
+
+  const filteredAgents = useMemo(() => {
+    if (!search) return agents;
+    const lower = search.toLowerCase();
+    return agents.filter(
+      (a) =>
+        a.name?.toLowerCase().includes(lower) ||
+        a.company?.toLowerCase().includes(lower) ||
+        a.phone?.toLowerCase().includes(lower) ||
+        a.email?.toLowerCase().includes(lower)
+    );
+  }, [agents, search]);
+
+  if (!isOpen) return null;
+
+  const activeCount = agents.filter((a) => a.status === 'active').length;
+  const inactiveCount = agents.filter((a) => a.status === 'inactive').length;
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/50" onClick={onClose} />
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="relative bg-white rounded-2xl shadow-xl max-w-4xl w-full max-h-[85vh] flex flex-col"
+        style={{ maxHeight: '60vh' }}
+      >
+        {/* Header */}
+        <div className="p-6 border-b">
+          <div className="flex justify-between items-center mb-4">
+            <div>
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Icons.Briefcase size={24} className="text-teal-600" />
+                Agents Management
+              </h2>
+              <p className="text-sm text-gray-500 mt-1">
+                {agents.length} agents • {activeCount} active • {inactiveCount}{' '}
+                inactive
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onRefresh}
+                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                title="Refresh"
+              >
+                <Icons.RefreshCw size={16} />
+              </button>
+              <button
+                onClick={onClose}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                <Icons.X size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="relative">
+            <Icons.Search
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+              size={16}
+            />
+            <input
+              type="text"
+              placeholder="Search agents by name, company, phone, email..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg w-full text-sm focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+            />
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="flex-1 overflow-y-auto p-6">
+          {filteredAgents.length === 0 ? (
+            <div className="text-center py-12">
+              <Icons.Users size={48} className="text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {search ? 'No matching agents' : 'No agents yet'}
+              </h3>
+              <p className="text-gray-500">
+                {search
+                  ? 'Try adjusting your search'
+                  : 'Add your first agent to get started'}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b">
+                      Agent
+                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b">
+                      Contact
+                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b">
+                      Commission
+                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b">
+                      Status
+                    </th>
+                    <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {filteredAgents.map((agent) => (
+                    <tr key={agent.id} className="hover:bg-gray-50">
+                      <td className="py-3 px-4">
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {agent.name}
+                          </p>
+                          {agent.company && (
+                            <p className="text-xs text-gray-500">
+                              {agent.company}
+                            </p>
+                          )}
+                          {agent.notes && (
+                            <p
+                              className="text-xs text-gray-400 mt-1 line-clamp-1"
+                              title={agent.notes}
+                            >
+                              {agent.notes}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="text-sm">
+                          {agent.phone && (
+                            <p className="text-gray-700">{agent.phone}</p>
+                          )}
+                          {agent.email && (
+                            <p className="text-gray-400 text-xs">
+                              {agent.email}
+                            </p>
+                          )}
+                          {agent.address && (
+                            <p
+                              className="text-gray-400 text-xs truncate max-w-[150px]"
+                              title={agent.address}
+                            >
+                              {agent.address}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        {agent.commission != null ? (
+                          <span className="text-sm font-medium text-teal-600">
+                            {agent.commission}%
+                          </span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span
+                          className={`inline-block px-2.5 py-1 rounded-full text-xs font-medium ${
+                            agent.status === 'active'
+                              ? 'bg-green-100 text-green-700 border border-green-300'
+                              : 'bg-gray-100 text-gray-700 border border-gray-300'
+                          }`}
+                        >
+                          {agent.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => onEdit(agent)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                            title="Edit agent"
+                          >
+                            <Icons.Edit2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => onDelete(agent.id)}
+                            disabled={deletingId === agent.id}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg disabled:opacity-50"
+                            title="Delete agent"
+                          >
+                            {deletingId === agent.id ? (
+                              <Icons.Loader2
+                                size={16}
+                                className="animate-spin"
+                              />
+                            ) : (
+                              <Icons.Trash2 size={16} />
+                            )}
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="border-t p-4 flex justify-between items-center">
+          <p className="text-sm text-gray-600">
+            Showing <span className="font-medium">{filteredAgents.length}</span>{' '}
+            of {agents.length} agents
+          </p>
+          <button
+            onClick={() => onEdit(null)}
+            className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium flex items-center gap-2"
+          >
+            <Icons.Plus size={16} />
+            Add New Agent
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+// ==================== STUDENT FORM MODAL ====================
 function StudentFormModal({
   isOpen,
   onClose,
@@ -153,6 +911,7 @@ function StudentFormModal({
     departmentIds: [],
   });
   const [errors, setErrors] = useState({});
+
   useEffect(() => {
     if (isOpen) {
       const today = getTodayStr();
@@ -193,6 +952,7 @@ function StudentFormModal({
       setErrors({});
     }
   }, [isOpen, initialData]);
+
   const validate = () => {
     const errs = {};
     if (!form.studentName.trim()) errs.studentName = 'Required';
@@ -202,11 +962,13 @@ function StudentFormModal({
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!validate()) return;
     onSubmit({ ...form, gpa: form.gpa ? parseFloat(form.gpa) : null });
   };
+
   const toggleDept = (id) =>
     setForm((prev) => ({
       ...prev,
@@ -214,7 +976,9 @@ function StudentFormModal({
         ? prev.departmentIds.filter((i) => i !== id)
         : [...prev.departmentIds, id],
     }));
+
   if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <div className="fixed inset-0 bg-black/50" onClick={onClose} />
@@ -616,6 +1380,7 @@ export default function PreadmissionPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('');
+  const [agentFilter, setAgentFilter] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [successMsg, setSuccessMsg] = useState(null);
@@ -637,7 +1402,19 @@ export default function PreadmissionPage() {
   const [panelDateFrom, setPanelDateFrom] = useState('');
   const [panelDateTo, setPanelDateTo] = useState('');
 
-  // ✅ Separate modal for follow-up from panel
+  // Agent management state
+  const [showAgentList, setShowAgentList] = useState(false);
+  const [showAgentForm, setShowAgentForm] = useState(false);
+  const [editingAgent, setEditingAgent] = useState(null);
+  const [agentSaving, setAgentSaving] = useState(false);
+  const [agentDeleting, setAgentDeleting] = useState(null);
+  const [showAgentDeleteConfirm, setShowAgentDeleteConfirm] = useState(null);
+
+  // Excel import state
+  const [showExcelImport, setShowExcelImport] = useState(false);
+  const [excelImporting, setExcelImporting] = useState(false);
+
+  // Separate modal for follow-up from panel
   const [showFollowUpModal, setShowFollowUpModal] = useState(false);
   const [followUpModalData, setFollowUpModalData] = useState({
     preadmissionId: null,
@@ -657,6 +1434,7 @@ export default function PreadmissionPage() {
       console.error(e);
     }
   }, []);
+
   const fetchDepartments = useCallback(async () => {
     try {
       const r = await fetch('/api/departments');
@@ -673,6 +1451,7 @@ export default function PreadmissionPage() {
       if (search) p.append('search', search);
       if (statusFilter) p.append('status', statusFilter);
       if (departmentFilter) p.append('departmentId', departmentFilter);
+      if (agentFilter) p.append('agentId', agentFilter);
       if (dateFrom) p.append('dateFrom', dateFrom);
       if (dateTo) p.append('dateTo', dateTo);
       const r = await fetch(`/api/preadmissions?${p}`);
@@ -682,7 +1461,7 @@ export default function PreadmissionPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, departmentFilter, dateFrom, dateTo]);
+  }, [search, statusFilter, departmentFilter, agentFilter, dateFrom, dateTo]);
 
   const fetchAllFollowUps = useCallback(async () => {
     setFollowUpsLoading(true);
@@ -719,6 +1498,209 @@ export default function PreadmissionPage() {
       setTimeout(() => setErrorMsg(null), 3000);
     }
   };
+
+  // ==================== EXCEL HANDLERS ====================
+
+  // Download Excel Template
+  const handleDownloadTemplate = () => {
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([EXCEL_HEADERS]);
+
+    // Add example data row
+    const exampleRow = [
+      'John Doe',
+      '9841234567',
+      'john@example.com',
+      'Kathmandu',
+      getTodayStr(),
+      'ABC College',
+      3.5,
+      'facebook',
+      '',
+      '',
+      'Computer Science, Business',
+      'Interested in morning classes',
+    ];
+    XLSX.utils.sheet_add_aoa(ws, [exampleRow], { origin: -1 });
+
+    // Set column widths
+    ws['!cols'] = EXCEL_HEADERS.map(() => ({ wch: 20 }));
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Students Template');
+    XLSX.writeFile(wb, 'preadmission_template.xlsx');
+  };
+
+  // Export current data to Excel
+  const handleExportExcel = () => {
+    const exportData = sortedPreadmissions.map((p) => {
+      const agent = agents.find((a) => a.id === p.agentId);
+      const deptNames =
+        p.departments?.map((d) => d.department?.name).join(', ') || '';
+
+      return {
+        'Student Name': p.studentName || '',
+        Phone: p.phone || '',
+        Email: p.email || '',
+        Address: p.address || '',
+        Date: p.date ? new Date(p.date).toISOString().split('T')[0] : '',
+        'Previous College': p.previousCollege || '',
+        GPA: p.gpa || '',
+        'Referral Source': p.referralSource || '',
+        'Referral Name': p.referralName || '',
+        'Agent Name': agent?.name || '',
+        'Department Names': deptNames,
+        Notes: p.notes || '',
+        Status: p.status || '',
+      };
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    XLSX.utils.book_append_sheet(wb, ws, 'Students');
+    XLSX.writeFile(wb, `preadmission_export_${getTodayStr()}.xlsx`);
+    showMsg('Data exported successfully!');
+  };
+
+  // Handle Excel import
+  const handleExcelImport = async (importData) => {
+    setExcelImporting(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const item of importData) {
+        try {
+          // Find agent by name if provided
+          let agentId = '';
+          if (item.agentName) {
+            const agent = agents.find(
+              (a) => a.name.toLowerCase() === item.agentName.toLowerCase()
+            );
+            if (agent) agentId = agent.id;
+          }
+
+          // Parse department names
+          const deptNames = item.departmentNames
+            ? item.departmentNames
+                .split(',')
+                .map((n) => n.trim())
+                .filter(Boolean)
+            : [];
+          const departmentIds = departments
+            .filter((d) =>
+              deptNames.some(
+                (name) => d.name.toLowerCase() === name.toLowerCase()
+              )
+            )
+            .map((d) => d.id);
+
+          if (departmentIds.length === 0) {
+            throw new Error('No valid departments found');
+          }
+
+          const payload = {
+            studentName: item.studentName,
+            phone: item.phone,
+            email: item.email,
+            address: item.address,
+            date: item.date,
+            previousCollege: item.previousCollege,
+            gpa: item.gpa,
+            referralSource: item.referralSource,
+            referralName: item.referralName,
+            agentId: agentId || '',
+            notes: item.notes,
+            departmentIds,
+          };
+
+          const r = await fetch('/api/preadmissions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+
+          if (r.ok) {
+            successCount++;
+          } else {
+            const data = await r.json();
+            throw new Error(data.error || 'Failed to create');
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`Error importing row ${item.rowNumber}:`, error);
+        }
+      }
+
+      await fetchPreadmissions();
+      showMsg(`Import complete: ${successCount} added, ${errorCount} failed`);
+      if (successCount === 0 && errorCount > 0) {
+        throw new Error(`All ${errorCount} records failed to import`);
+      }
+    } catch (error) {
+      throw new Error(error.message);
+    } finally {
+      setExcelImporting(false);
+    }
+  };
+
+  // Agent CRUD handlers
+  const handleAgentSubmit = async (formData) => {
+    setAgentSaving(true);
+    try {
+      const url = editingAgent
+        ? `/api/agents/${editingAgent.id}`
+        : '/api/agents';
+      const method = editingAgent ? 'PUT' : 'POST';
+      const r = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+
+      if (r.ok) {
+        showMsg(editingAgent ? 'Agent updated!' : 'Agent added!');
+        setShowAgentForm(false);
+        setEditingAgent(null);
+        fetchAgents();
+      } else {
+        const data = await r.json();
+        throw new Error(data.error || data.message || 'Failed to save agent');
+      }
+    } catch (e) {
+      showMsg(e.message, 'error');
+    } finally {
+      setAgentSaving(false);
+    }
+  };
+
+  const handleAgentDelete = async () => {
+    if (!showAgentDeleteConfirm) return;
+    setAgentDeleting(showAgentDeleteConfirm);
+    try {
+      const r = await fetch(`/api/agents/${showAgentDeleteConfirm}`, {
+        method: 'DELETE',
+      });
+      if (r.ok) {
+        showMsg('Agent deleted!');
+        setShowAgentDeleteConfirm(null);
+        fetchAgents();
+      } else {
+        const data = await r.json();
+        throw new Error(data.error || data.message || 'Failed to delete agent');
+      }
+    } catch (e) {
+      showMsg(e.message, 'error');
+    } finally {
+      setAgentDeleting(null);
+    }
+  };
+
+  const openAgentEditor = (agent) => {
+    setEditingAgent(agent);
+    setShowAgentForm(true);
+  };
+
+  // Student handlers
   const handleSubmit = async (fd) => {
     setSaving(true);
     try {
@@ -742,6 +1724,7 @@ export default function PreadmissionPage() {
       setSaving(false);
     }
   };
+
   const handleDelete = async () => {
     if (!deleteId) return;
     setIsDeleting(true);
@@ -761,7 +1744,7 @@ export default function PreadmissionPage() {
     }
   };
 
-  // ✅ Submit follow-up from modal (panel)
+  // Follow-up handlers
   const handleFollowUpModalSubmit = async (formData) => {
     if (!followUpModalData.preadmissionId) return;
     setFollowUpSaving(followUpModalData.preadmissionId);
@@ -797,7 +1780,6 @@ export default function PreadmissionPage() {
     }
   };
 
-  // ✅ Submit follow-up from inline form (main table)
   const handleAddFollowUp = async (preadmissionId) => {
     if (!followUpForm.followUpDate) return;
     setFollowUpSaving(preadmissionId);
@@ -852,10 +1834,12 @@ export default function PreadmissionPage() {
       setFollowUpDeleting(null);
     }
   };
+
   const clearFilters = () => {
     setSearch('');
     setStatusFilter('');
     setDepartmentFilter('');
+    setAgentFilter('');
     setDateFrom('');
     setDateTo('');
   };
@@ -968,7 +1952,12 @@ export default function PreadmissionPage() {
   );
 
   const hasActiveFilters =
-    search || statusFilter || departmentFilter || dateFrom || dateTo;
+    search ||
+    statusFilter ||
+    departmentFilter ||
+    agentFilter ||
+    dateFrom ||
+    dateTo;
   const fd = (d) =>
     d
       ? new Date(d).toLocaleDateString('en-US', {
@@ -978,7 +1967,6 @@ export default function PreadmissionPage() {
         })
       : 'N/A';
 
-  // ✅ Open follow-up modal from panel
   const openFollowUpModal = (studentId) => {
     const student = preadmissions.find((p) => p.id === parseInt(studentId));
     setFollowUpModalData({
@@ -988,7 +1976,6 @@ export default function PreadmissionPage() {
     setShowFollowUpModal(true);
   };
 
-  // ✅ Open inline follow-up form from main table
   const openFollowUpInline = (studentId) => {
     setFollowUpForm({ followUpDate: getTodayStr(), outcome: '', notes: '' });
     setActiveFollowUpRow(activeFollowUpRow === studentId ? null : studentId);
@@ -1062,10 +2049,37 @@ export default function PreadmissionPage() {
                 Preadmission Management
               </h1>
               <p className="text-sm text-gray-500 mt-1">
-                {stats.total} inquiries • {allFollowUps.length} follow-ups
+                {stats.total} inquiries • {allFollowUps.length} follow-ups •{' '}
+                {agents.length} agents
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {/* Excel Actions Group */}
+              {hasCreate && (
+                <>
+                  <button
+                    onClick={() => setShowExcelImport(true)}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm font-medium"
+                    title="Import students from Excel"
+                  >
+                    <Icons.Upload size={16} /> Import Excel
+                  </button>
+                  <button
+                    onClick={handleExportExcel}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2 text-sm"
+                    title="Export current data to Excel"
+                  >
+                    <Icons.Download size={16} /> Export Excel
+                  </button>
+                  <button
+                    onClick={handleDownloadTemplate}
+                    className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 flex items-center gap-2 text-sm"
+                    title="Download Excel template"
+                  >
+                    <Icons.FileSpreadsheet size={16} /> Template
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => setShowFollowUpPanel(!showFollowUpPanel)}
                 className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium ${
@@ -1076,6 +2090,12 @@ export default function PreadmissionPage() {
               >
                 <Icons.LayoutGrid size={16} />{' '}
                 {showFollowUpPanel ? 'Hide Panel' : 'Follow-up Panel'}
+              </button>
+              <button
+                onClick={() => setShowAgentList(true)}
+                className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 flex items-center gap-2 text-sm"
+              >
+                <Icons.Briefcase size={16} /> Manage Agents
               </button>
               <button
                 onClick={() => {
@@ -1104,7 +2124,7 @@ export default function PreadmissionPage() {
 
       {/* Stats */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           {[
             {
               icon: Icons.Users,
@@ -1135,6 +2155,12 @@ export default function PreadmissionPage() {
               color: 'bg-purple-100 text-purple-600',
               label: 'Follow-ups',
               value: allFollowUps.length,
+            },
+            {
+              icon: Icons.Briefcase,
+              color: 'bg-indigo-100 text-indigo-600',
+              label: 'Agents',
+              value: agents.length,
             },
           ].map((s, i) => (
             <div
@@ -1197,6 +2223,19 @@ export default function PreadmissionPage() {
               {departments.map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.name}
+                </option>
+              ))}
+            </select>
+            <select
+              value={agentFilter}
+              onChange={(e) => setAgentFilter(e.target.value)}
+              className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm bg-white min-w-[150px]"
+            >
+              <option value="">All Agents</option>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                  {a.company ? ` (${a.company})` : ''}
                 </option>
               ))}
             </select>
@@ -1388,7 +2427,7 @@ export default function PreadmissionPage() {
                     style={{ maxHeight: '350px' }}
                   >
                     <table className="w-full border-collapse text-xs">
-                      <thead className="sticky top-0 z-0">
+                      <thead className="sticky top-0 z-10">
                         <tr className="bg-gray-50">
                           <th className="sticky left-0 bg-gray-50 text-left py-2 px-3 font-semibold text-gray-600 uppercase border-b z-20 min-w-[150px]">
                             Student
@@ -1430,7 +2469,7 @@ export default function PreadmissionPage() {
                           });
                           return (
                             <tr key={id} className="hover:bg-gray-50">
-                              <td className="sticky left-0 bg-white py-2 px-3 font-medium text-gray-900 border-b z-0">
+                              <td className="sticky left-0 bg-white py-2 px-3 font-medium text-gray-900 border-b z-10">
                                 {name}
                               </td>
                               <td className="py-2 px-3 text-gray-600 border-b whitespace-nowrap">
@@ -1526,7 +2565,6 @@ export default function PreadmissionPage() {
                                   </td>
                                 );
                               })}
-                              {/* ✅ + button opens follow-up modal */}
                               <td className="py-2 px-2 text-center border-b">
                                 <button
                                   onClick={() => openFollowUpModal(id)}
@@ -1575,15 +2613,23 @@ export default function PreadmissionPage() {
               </button>
             ) : (
               hasCreate && (
-                <button
-                  onClick={() => {
-                    setEditingData(null);
-                    setShowForm(true);
-                  }}
-                  className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
-                >
-                  Add First Student
-                </button>
+                <div className="flex gap-3 justify-center">
+                  <button
+                    onClick={() => {
+                      setEditingData(null);
+                      setShowForm(true);
+                    }}
+                    className="px-6 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700"
+                  >
+                    Add First Student
+                  </button>
+                  <button
+                    onClick={handleDownloadTemplate}
+                    className="px-6 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+                  >
+                    Download Template
+                  </button>
+                </div>
               )
             )}
           </div>
@@ -1594,7 +2640,7 @@ export default function PreadmissionPage() {
               style={{ maxHeight: 'calc(100vh - 300px)' }}
             >
               <table className="w-full">
-                <thead className="sticky top-0 z-0">
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-gray-50">
                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
                       #
@@ -1607,6 +2653,9 @@ export default function PreadmissionPage() {
                     </th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
                       Date
+                    </th>
+                    <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
+                      Agent
                     </th>
                     <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase border-b bg-gray-50">
                       Depts
@@ -1633,6 +2682,7 @@ export default function PreadmissionPage() {
                     const studentFollowUps = mainFollowUpsByStudent[p.id] || [];
                     const isActive = activeFollowUpRow === p.id;
                     const hasFollowUp = studentFollowUps.length > 0;
+                    const agent = agents.find((a) => a.id === p.agentId);
                     return (
                       <React.Fragment key={p.id}>
                         <tr
@@ -1671,6 +2721,16 @@ export default function PreadmissionPage() {
                           </td>
                           <td className="py-3 px-4 text-sm text-gray-600 whitespace-nowrap">
                             {fd(p.date)}
+                          </td>
+                          <td className="py-3 px-4">
+                            {agent ? (
+                              <span className="inline-flex items-center gap-1 text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded-full">
+                                <Icons.Briefcase size={10} />
+                                {agent.name}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex flex-wrap gap-1">
@@ -1799,7 +2859,7 @@ export default function PreadmissionPage() {
                         </tr>
                         {isActive && (
                           <tr>
-                            <td colSpan={9} className="bg-blue-50/50 p-3">
+                            <td colSpan={10} className="bg-blue-50/50 p-3">
                               <div className="flex items-center gap-3 flex-wrap">
                                 <span className="text-sm font-medium text-blue-900">
                                   Add Follow-up for{' '}
@@ -1889,7 +2949,7 @@ export default function PreadmissionPage() {
         )}
       </div>
 
-      {/* Student Form Modal */}
+      {/* Modals */}
       <StudentFormModal
         isOpen={showForm}
         onClose={() => {
@@ -1903,7 +2963,6 @@ export default function PreadmissionPage() {
         loading={saving}
       />
 
-      {/* ✅ Follow-up Form Modal (from panel) */}
       <FollowUpFormModal
         isOpen={showFollowUpModal}
         onClose={() => {
@@ -1915,7 +2974,90 @@ export default function PreadmissionPage() {
         loading={followUpSaving === followUpModalData.preadmissionId}
       />
 
-      {/* Delete Confirmation */}
+      <ExcelImportModal
+        isOpen={showExcelImport}
+        onClose={() => setShowExcelImport(false)}
+        onImport={handleExcelImport}
+        departments={departments}
+        agents={agents}
+      />
+
+      <AgentListModal
+        isOpen={showAgentList}
+        onClose={() => setShowAgentList(false)}
+        agents={agents}
+        onEdit={openAgentEditor}
+        onDelete={(id) => setShowAgentDeleteConfirm(id)}
+        deletingId={agentDeleting}
+        onRefresh={fetchAgents}
+      />
+
+      <AgentFormModal
+        isOpen={showAgentForm}
+        onClose={() => {
+          setShowAgentForm(false);
+          setEditingAgent(null);
+        }}
+        onSubmit={handleAgentSubmit}
+        initialData={editingAgent}
+        loading={agentSaving}
+      />
+
+      {/* Confirmation Modals */}
+      <AnimatePresence>
+        {showAgentDeleteConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[90] flex items-center justify-center p-4 bg-black/50"
+            onClick={() => !agentDeleting && setShowAgentDeleteConfirm(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.9 }}
+              className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Icons.AlertTriangle size={32} className="text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-800 mb-2">
+                  Delete Agent?
+                </h3>
+                <p className="text-gray-600">
+                  This will remove the agent. Students assigned to this agent
+                  will be unaffected.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowAgentDeleteConfirm(null)}
+                  disabled={agentDeleting}
+                  className="flex-1 px-4 py-2.5 border rounded-lg font-medium hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleAgentDelete}
+                  disabled={agentDeleting}
+                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {agentDeleting ? (
+                    <Icons.Loader2 size={18} className="animate-spin" />
+                  ) : (
+                    <Icons.Trash2 size={18} />
+                  )}
+                  {agentDeleting ? 'Deleting...' : 'Delete Agent'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {deleteId && (
           <motion.div
