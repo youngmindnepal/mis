@@ -1,124 +1,79 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 
-async function hasPermission(userId, resource, action) {
+export async function GET(request, { params }) {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
+    const { id } = await params; // Important: await params
+    const classroomId = parseInt(id);
+
+    if (isNaN(classroomId)) {
+      return NextResponse.json(
+        { error: 'Invalid classroom ID' },
+        { status: 400 }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const date = searchParams.get('date');
+
+    if (!date) {
+      return NextResponse.json(
+        { error: 'Date parameter is required' },
+        { status: 400 }
+      );
+    }
+
+    // Find the class session for this date and classroom
+    const session = await prisma.classSession.findFirst({
+      where: {
+        classroomId: classroomId,
+        date: {
+          gte: new Date(date),
+          lt: new Date(new Date(date).getTime() + 24 * 60 * 60 * 1000), // Next day
+        },
+      },
+    });
+
+    if (!session) {
+      return NextResponse.json({
+        session: null,
+        attendances: [],
+      });
+    }
+
+    // Get all attendances for this session
+    const attendances = await prisma.attendance.findMany({
+      where: {
+        classSessionId: session.id,
+      },
       include: {
-        role: {
-          include: {
-            permissions: {
-              include: {
-                permission: true,
-              },
-            },
+        student: {
+          select: {
+            id: true,
+            name: true,
+            rollNumber: true,
           },
         },
       },
     });
 
-    if (!user) return false;
-    if (user.role?.name === 'SYSTEM_ADMIN') return true;
-
-    const hasRequiredPermission = user.role?.permissions?.some(
-      (rp) =>
-        rp.permission.resource === resource && rp.permission.action === action
-    );
-    return hasRequiredPermission || false;
-  } catch (error) {
-    console.error('Error checking permission:', error);
-    return false;
-  }
-}
-
-export async function GET(request, { params }) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const canReadAttendance = await hasPermission(
-      session.user.id,
-      'attendance',
-      'read'
-    );
-    if (!canReadAttendance) {
-      return NextResponse.json(
-        { error: 'Forbidden: You do not have permission to view attendance' },
-        { status: 403 }
-      );
-    }
-
-    const { id } = await params;
-    const classroomId = parseInt(id);
-    const { searchParams } = new URL(request.url);
-    const dateParam = searchParams.get('date');
-
-    if (!dateParam) {
-      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
-    }
-
-    const targetDate = new Date(dateParam);
-    targetDate.setHours(0, 0, 0, 0);
-    const nextDay = new Date(targetDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-
-    const classSession = await prisma.classSession.findFirst({
-      where: {
-        classroomId,
-        date: { gte: targetDate, lt: nextDay },
-      },
-      include: { attendances: true },
-    });
-
-    const enrollments = await prisma.classroomEnrollment.findMany({
-      where: { classroomId, status: 'active' },
-      include: {
-        student: {
-          include: { user: true },
-        },
-      },
-    });
-
-    const activeEnrollments = enrollments.filter(
-      (enrollment) =>
-        enrollment.student && enrollment.student.status === 'active'
-    );
-
-    const attendances = activeEnrollments.map((enrollment) => {
-      const attendance = classSession?.attendances?.find(
-        (a) => a.studentId === enrollment.studentId
-      );
-      return {
-        studentId: enrollment.student.id,
-        studentName: enrollment.student.user?.name || enrollment.student.name,
-        rollNumber: enrollment.student.rollNo || '-',
-        status: attendance?.status || 'present',
-        remarks: attendance?.remarks || '',
-        attendanceId: attendance?.id || null,
-      };
-    });
+    // Transform for frontend
+    const transformedAttendances = attendances.map((att) => ({
+      studentId: att.studentId,
+      studentName: att.student?.name || 'Unknown',
+      rollNumber: att.student?.rollNumber || '-',
+      status: att.status,
+      remarks: att.remarks || '',
+    }));
 
     return NextResponse.json({
-      session: classSession
-        ? {
-            id: classSession.id,
-            date: classSession.date,
-            startTime: classSession.startTime,
-            endTime: classSession.endTime,
-            syllabusCovered: classSession.syllabusCovered,
-          }
-        : null,
-      attendances,
+      session,
+      attendances: transformedAttendances,
     });
   } catch (error) {
     console.error('Error fetching attendance by date:', error);
     return NextResponse.json(
-      { error: 'Internal server error: ' + error.message },
+      { error: 'Failed to fetch attendance', details: error.message },
       { status: 500 }
     );
   }

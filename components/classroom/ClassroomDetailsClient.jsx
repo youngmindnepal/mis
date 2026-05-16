@@ -196,7 +196,7 @@ export default function ClassroomDetailsClient({
           attendanceByStudent[att.studentId] = {
             studentId: att.studentId,
             studentName: att.student?.name || 'Unknown',
-            rollNumber: att.student?.rollNumber || '-',
+            rollNumber: att.student?.rollNo || '-',
             attendances: {},
             presentCount: 0,
             totalSessions: 0,
